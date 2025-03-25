@@ -127,13 +127,15 @@ class DataProcess:
         # model is no use, but keep it here and can be removed later
         
         # drop the residual cells
-        num_patch = (self.img_height // self.patch_size) * (self.img_width // self.patch_size)
+        num_patch_y = self.img_height // self.patch_size 
+        num_patch_x = self.img_width // self.patch_size
+        num_patch = num_patch_x*num_patch_y
         # drop the residual steps
         num_seq = self.timesteps // self.input_length
         framesteps = num_seq * self.input_length
         
         init_cond = torch.empty((num_patch*num_seq, 1, self.init_cond_channels, self.patch_size, self.patch_size),
-                                      dtype=torch.float)  # np.float32
+                                 dtype=torch.float)  # np.float32
         
         static_inputs_temp = torch.empty((num_patch, 1, self.static_channels, self.patch_size, self.patch_size),
                                           dtype=torch.float)  # np.float32
@@ -147,12 +149,14 @@ class DataProcess:
         # static
         static_inputs_name = self.static_inputs_path
         frame_np = read_pfb(get_absolute_path(static_inputs_name)).astype(np.float32)
+        frame_np = frame_np[:, num_patch_y*self.patch_size, num_patch_x*self.patch_size]
         frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
         static_inputs_temp[:,0,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
         
         # initial
         init_cond_name = self.init_cond_path
         frame_np = read_pfb(get_absolute_path(init_cond_name)).astype(np.float32)
+        frame_np = frame_np[:, num_patch_y*self.patch_size, num_patch_x*self.patch_size]
         frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
         init_cond[0:num_patch,0,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
                 
@@ -162,11 +166,13 @@ class DataProcess:
             
             forcings_name = self.forcings_path + str(i+self.start_step).zfill(5) + ".pfb"
             frame_np = read_pfb(get_absolute_path(forcings_name)).astype(np.float32)
+            frame_np = frame_np[:, num_patch_y*self.patch_size, num_patch_x*self.patch_size]
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
             forcings_temp[:,i,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
 
             targets_name = self.targets_path + str(i+self.start_step).zfill(5) + ".pfb"
             frame_np = read_pfb(get_absolute_path(targets_name)).astype(np.float32)
+            frame_np = frame_np[:, num_patch_y*self.patch_size, num_patch_x*self.patch_size]
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
             targets_temp[:,i,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
             
@@ -175,12 +181,15 @@ class DataProcess:
                 init_cond[num_patch*count:num_patch*(count+1),0,:,:,:] \
                     = targets_temp[:,i,:,:,:]
                 
-        # reshape forcings and targets
-        forcings = torch.split(forcings_temp, self.input_length, dim = 1)
-        forcings = torch.cat(forcings, dim = 0).to(self.input_param.device)
-            
-        targets = torch.split(targets_temp, self.input_length, dim = 1)
-        targets = torch.cat(targets, dim = 0).to(self.input_param.device)
+        # # reshape forcings and targets
+        # forcings = torch.split(forcings_temp, self.input_length, dim = 1)
+        # forcings = torch.cat(forcings, dim = 0).to(self.input_param.device)
+        forcings = preprocess.reshape_patch_time(forcings_temp, self.input_length)
+        forcings = forcings.to(self.input_param.device)    
+        # targets = torch.split(targets_temp, self.input_length, dim = 1)
+        # targets = torch.cat(targets, dim = 0).to(self.input_param.device)
+        targets = preprocess.reshape_patch_time(targets_temp, self.input_length)
+        targets = targets.to(self.input_param.device)
         
         # repeat static
         static_inputs = static_inputs_temp.repeat(num_seq,1,1,1,1).to(self.input_param.device)

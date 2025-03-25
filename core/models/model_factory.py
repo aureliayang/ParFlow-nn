@@ -1,3 +1,5 @@
+__author__ = 'chen yang'
+
 import os
 import torch
 from torch.optim import AdamW
