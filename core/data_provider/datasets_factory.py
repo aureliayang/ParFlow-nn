@@ -9,7 +9,7 @@ datasets_map = {
 }
 
 
-def data_provider(configs, is_training=True):
+def data_provider(configs):
     dataset_name = configs.dataset_name
     if dataset_name not in datasets_map:
         raise ValueError('Name of dataset unknown %s' % dataset_name)
@@ -22,7 +22,7 @@ def data_provider(configs, is_training=True):
         #                'input_data_type': 'float32',
         #                'name': dataset_name + ' iterator'}
         input_handle = datasets_map[dataset_name].DataProcess(configs)
-        if is_training:
+        if configs.is_training:
             train_input_handle = input_handle.get_train_input_handle()
             train_input_handle.begin(do_shuffle=True)
             test_input_handle = input_handle.get_test_input_handle()

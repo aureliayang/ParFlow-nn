@@ -39,21 +39,21 @@ def test(model, test_input_handle, configs, itr):
         psnr.append(0)
         lp.append(0)
 
-    # reverse schedule sampling
-    if configs.reverse_scheduled_sampling == 1:
-        mask_input = 1
-    else:
-        mask_input = configs.input_length
+    # # reverse schedule sampling
+    # if configs.reverse_scheduled_sampling == 1:
+    #     mask_input = 1
+    # else:
+    #     mask_input = configs.input_length
 
-    real_input_flag = np.zeros(
-        (configs.batch_size,
-         configs.total_length - mask_input - 1,
-         configs.img_width // configs.patch_size,
-         configs.img_width // configs.patch_size,
-         configs.patch_size ** 2 * configs.img_channel))
+    # real_input_flag = np.zeros(
+    #     (configs.batch_size,
+    #      configs.total_length - mask_input - 1,
+    #      configs.img_width // configs.patch_size,
+    #      configs.img_width // configs.patch_size,
+    #      configs.patch_size ** 2 * configs.img_channel))
 
-    if configs.reverse_scheduled_sampling == 1:
-        real_input_flag[:, :configs.input_length - 1, :, :] = 1.0
+    # if configs.reverse_scheduled_sampling == 1:
+    #     real_input_flag[:, :configs.input_length - 1, :, :] = 1.0
 
     while (test_input_handle.no_batch_left() == False):
         batch_id = batch_id + 1

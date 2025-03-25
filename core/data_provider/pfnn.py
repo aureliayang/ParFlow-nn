@@ -99,9 +99,14 @@ class DataProcess:
         self.targets_path = os.path.join(configs.targets_path, targets_filename) 
         
         # the files should be continuous in time
-        self.start_step = configs.start_step
-        self.end_step   = configs.end_step
-        self.timesteps  = configs.end_step - configs.start_step + 1
+        if configs.is_training:
+            self.start_step = configs.training_start_step
+            self.end_step   = configs.training_end_step
+            self.timesteps  = configs.training_end_step - configs.training_start_step + 1
+        else:
+            self.start_step = configs.test_start_step
+            self.end_step   = configs.test_end_step
+            self.timesteps  = configs.test_end_step - configs.test_start_step + 1
         
         # the RNN length
         self.input_length = configs.input_length

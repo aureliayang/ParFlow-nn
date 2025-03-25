@@ -10,7 +10,7 @@ class Model(object):
         self.num_hidden = [int(x) for x in configs.num_hidden.split(',')]
         self.num_layers = len(self.num_hidden)
         networks_map = {
-            'predrnn_pf': predrnn.RNN,
+            'predrnn_pf': predrnn_pf.RNN,
             # 'predrnn': predrnn.RNN,
             # 'predrnn_v2': predrnn_v2.RNN,
             # 'action_cond_predrnn': action_cond_predrnn.RNN,
@@ -49,8 +49,8 @@ class Model(object):
         self.optimizer.step()
         return loss.detach().cpu().numpy()
 
-    def test(self, frames, mask):
-        frames_tensor = torch.FloatTensor(frames).to(self.configs.device)
-        mask_tensor = torch.FloatTensor(mask).to(self.configs.device)
-        next_frames, _ = self.network(frames_tensor, mask_tensor)
+    def test(self, forcings, init_cond, static_inputs, targets):
+        # frames_tensor = torch.FloatTensor(frames).to(self.configs.device)
+        # mask_tensor = torch.FloatTensor(mask).to(self.configs.device)
+        next_frames, _ = self.network(forcings, init_cond, static_inputs, targets)
         return next_frames.detach().cpu().numpy()
