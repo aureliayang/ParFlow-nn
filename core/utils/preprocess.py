@@ -5,7 +5,8 @@ import torch
 
 def reshape_patch(img_tensor, patch_size):
     assert 5 == img_tensor.ndim
-    batch_size, seq_length, num_channels, img_height, img_width = img_tensor.shape
+    batch_size, seq_length, num_channels, img_height, img_width \
+        = img_tensor.shape
     
     a = torch.split(img_tensor, patch_size, dim = 3)
     b = torch.cat(a, dim = 0)

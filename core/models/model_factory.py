@@ -44,8 +44,7 @@ class Model(object):
         # targets_tensor = torch.FloatTensor(targets).to(self.configs.device)
         # mask_tensor = torch.FloatTensor(mask).to(self.configs.device)
         self.optimizer.zero_grad()
-        next_frames, loss = self.network(forcings_tensor, init_cond_tensor, 
-                                         static_inputs_tensor, targets_tensor)
+        next_frames, loss = self.network(forcings, init_cond, static_inputs, targets)
         loss.backward()
         self.optimizer.step()
         return loss.detach().cpu().numpy()

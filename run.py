@@ -23,20 +23,28 @@ parser.add_argument('--train_data_paths', type=str, default='data/moving-mnist-e
 parser.add_argument('--valid_data_paths', type=str, default='data/moving-mnist-example/moving-mnist-valid.npz')
 parser.add_argument('--save_dir', type=str, default='checkpoints/mnist_predrnn')
 parser.add_argument('--gen_frm_dir', type=str, default='results/mnist_predrnn')
+
 parser.add_argument('--input_length', type=int, default=10)
-parser.add_argument('--total_length', type=int, default=20)
+parser.add_argument('--start_step', type=int, default=20)
+parser.add_argument('--end_step', type=int, default=20)
+# parser.add_argument('--total_length', type=int, default=20)
+parser.add_argument('--img_height', type=int, default=64)
 parser.add_argument('--img_width', type=int, default=64)
-parser.add_argument('--img_channel', type=int, default=1)
+# parser.add_argument('--img_channel', type=int, default=1)
 
 #paths
 parser.add_argument('--init_cond_path', type=str, default='')
 parser.add_argument('--init_cond_filename', type=str, default='')
+parser.add_argument('--static_inputs_path', type=str, default='')
+parser.add_argument('--static_inputs_filename', type=str, default='')
+parser.add_argument('--forcings_path', type=str, default='')
+parser.add_argument('--targets_path', type=str, default='')
 
 
-        self.init_cond_channels = configs.init_cond_channels
-        self.static_channels = configs.static_channels
-        self.act_channels = configs.act_channels
-        self.img_channels = configs.img_channels
+parser.add_argument('--init_cond_channels', type=int, default='')
+parser.add_argument('--static_channels', type=int, default='')
+parser.add_argument('--act_channels', type=int, default='')
+parser.add_argument('--img_channels', type=int, default='')
 
 # model
 parser.add_argument('--model_name', type=str, default='predrnn')
@@ -44,8 +52,9 @@ parser.add_argument('--pretrained_model', type=str, default='')
 parser.add_argument('--num_hidden', type=str, default='64,64,64,64')
 parser.add_argument('--filter_size', type=int, default=5)
 parser.add_argument('--stride', type=int, default=1)
+
 parser.add_argument('--patch_size', type=int, default=4)
-parser.add_argument('--layer_norm', type=int, default=1)
+# parser.add_argument('--layer_norm', type=int, default=1)
 parser.add_argument('--decouple_beta', type=float, default=0.1)
 
 # # reverse scheduled sampling
@@ -87,16 +96,14 @@ def train_wrapper(model):
     if args.pretrained_model:
         model.load(args.pretrained_model)
     # load data
-    train_input_handle, test_input_handle = datasets_factory.data_provider(
-        args.dataset_name, args.train_data_paths, args.valid_data_paths, args.batch_size, args.img_width,
-        seq_length=args.total_length, injection_action=args.injection_action, is_training=True)
+    train_input_handle, test_input_handle = datasets_factory.data_provider(args, is_training=True)
 
-    eta = args.sampling_start_value
+    # eta = args.sampling_start_value
 
     for itr in range(1, args.max_iterations + 1):
         if train_input_handle.no_batch_left():
             train_input_handle.begin(do_shuffle=True)
-        ims = train_input_handle.get_batch()
+        forcings, init_cond, static_inputs, targets = train_input_handle.get_batch()
         # ims = preprocess.reshape_patch(ims, args.patch_size)
 
         # if args.reverse_scheduled_sampling == 1:
@@ -114,14 +121,12 @@ def train_wrapper(model):
 
         train_input_handle.next()
 
-
 def test_wrapper(model):
     model.load(args.pretrained_model)
     test_input_handle = datasets_factory.data_provider(
         args.dataset_name, args.train_data_paths, args.valid_data_paths, args.batch_size, args.img_width,
         seq_length=args.total_length, injection_action=args.injection_action, is_training=False)
     trainer.test(model, test_input_handle, args, 'test_result')
-
 
 if os.path.exists(args.save_dir):
     shutil.rmtree(args.save_dir)

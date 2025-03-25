@@ -58,17 +58,17 @@ class InputHandle:
                                           self.img_width, self.img_width).to(self.configs.device)
         static_inputs_batch = torch.zeros(self.batch_size, 1, self.static_inputs_channels,
                                           self.img_width, self.img_width).to(self.configs.device)
-        forcigs_batch       = torch.zeros(self.batch_size, self.input_length, self.act_channels,
+        forcings_batch       = torch.zeros(self.batch_size, self.input_length, self.act_channels,
                                           self.img_width, self.img_width).to(self.configs.device)
         targets_batch       = torch.zeros(self.batch_size, self.input_length, self.img_channels,
                                           self.img_width, self.img_width).to(self.configs.device)
 
         init_cond_batch = self.init_cond[self.current_p:self.current_p + self.batch_size, :, :, :, :]
         static_inputs_batch = self.static_inputs[self.current_p:self.current_p + self.batch_size, :, :, :, :]
-        forcigs_batch = self.forcings[self.current_p:self.current_p + self.batch_size, :, :, :, :]
+        forcings_batch = self.forcings[self.current_p:self.current_p + self.batch_size, :, :, :, :]
         targets_batch = self.targets[self.current_p:self.current_p + self.batch_size, :, :, :, :]
             
-        return init_cond_batch, static_inputs_batch, forcigs_batch, targets_batch
+        return forcings_batch, init_cond_batch, static_inputs_batch, targets_batch
 
     def print_stat(self):
         logger.info("Iterator Name: " + self.name)
