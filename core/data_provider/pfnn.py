@@ -1,12 +1,8 @@
 __author__ = 'gaozhifeng'
 import numpy as np
 import os
-# import cv2
-# from PIL import Image
+import torch
 import logging
-# import random
-# from typing import Iterable, List
-# from dataclasses import dataclass
 from core.utils import preprocess
 from parflow.tools.fs import get_absolute_path
 from parflow.tools.io import write_pfb, read_pfb
@@ -15,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 class InputHandle:
     def __init__(self, init_cond, static_inputs, forcings, targets, total_seq, configs):
+        self.configs = configs
         self.name = configs.pf_runname
         self.batch_size = configs.batch_size
         self.img_width = configs.patch_size
@@ -23,8 +20,7 @@ class InputHandle:
         self.forcings = forcings
         self.targets = targets
         self.total_seq = total_seq
-        # self.current_p = 0
-        # self.current_batch_indices = []
+        self.current_p = 0
         self.input_length = configs.input_length
 
     def total(self):
@@ -34,7 +30,10 @@ class InputHandle:
         logger.info("Initialization for read data ")
         if do_shuffle:
             rand_perm = torch.randperm(self.total_seq)
-            data = data[rand_perm]
+            self.init_cond = self.init_cond[rand_perm]  
+            self.static_inputs = self.static_inputs[rand_perm]
+            self.forcings = self.forcings[rand_perm]
+            self.targets = self.targets[rand_perm]
         self.current_p = 0
 
     def next(self):
@@ -55,18 +54,18 @@ class InputHandle:
                 ". Consider to user iterators.begin() to rescan from the beginning of the iterators")
             return None
 
-        init_cond_batch     = torch.zeros(self.batch_size, 1, 
-                                          self.init_cond_channels, self.img_width, self.img_width)
-        static_inputs_batch = torch.zeros(self.batch_size, 1, 
-                                          self.static_inputs_channels, self.img_width, self.img_width)
-        forcigs_batch       = torch.zeros(self.batch_size, self.input_length, 
-                                          self.act_channels, self.img_width, self.img_width)
-        targets_batch       = torch.zeros(self.batch_size, self.input_length, 
-                                          self.img_channels, self.img_width, self.img_width)
+        init_cond_batch     = torch.zeros(self.batch_size, 1, self.init_cond_channels, 
+                                          self.img_width, self.img_width).to(self.configs.device)
+        static_inputs_batch = torch.zeros(self.batch_size, 1, self.static_inputs_channels,
+                                          self.img_width, self.img_width).to(self.configs.device)
+        forcigs_batch       = torch.zeros(self.batch_size, self.input_length, self.act_channels,
+                                          self.img_width, self.img_width).to(self.configs.device)
+        targets_batch       = torch.zeros(self.batch_size, self.input_length, self.img_channels,
+                                          self.img_width, self.img_width).to(self.configs.device)
 
         init_cond_batch = self.init_cond[self.current_p:self.current_p + self.batch_size, :, :, :, :]
         static_inputs_batch = self.static_inputs[self.current_p:self.current_p + self.batch_size, :, :, :, :]
-        forcigs_batch = self.forcigs[self.current_p:self.current_p + self.batch_size, :, :, :, :]
+        forcigs_batch = self.forcings[self.current_p:self.current_p + self.batch_size, :, :, :, :]
         targets_batch = self.targets[self.current_p:self.current_p + self.batch_size, :, :, :, :]
             
         return init_cond_batch, static_inputs_batch, forcigs_batch, targets_batch
@@ -123,77 +122,65 @@ class DataProcess:
         # model is no use, but keep it here and can be removed later
         
         # drop the residual cells
-        num_patch  = (self.img_height // self.patch_size) * (self.img_width // self.patch_size)
+        num_patch = (self.img_height // self.patch_size) * (self.img_width // self.patch_size)
         # drop the residual steps
         num_seq = self.timesteps // self.input_length
         framesteps = num_seq * self.input_length
         
-        init_cond_temp = np.empty((num_patch*num_seq, 1, self.init_cond_channels, self.patch_size, self.patch_size),
-                                   dtype=np.float32)  # np.float32
+        init_cond = torch.empty((num_patch*num_seq, 1, self.init_cond_channels, self.patch_size, self.patch_size),
+                                      dtype=torch.float)  # np.float32
         
-        static_inputs_temp = np.empty((num_patch, 1, self.static_channels, self.patch_size, self.patch_size),
-                                       dtype=np.float32)  # np.float32
+        static_inputs_temp = torch.empty((num_patch, 1, self.static_channels, self.patch_size, self.patch_size),
+                                          dtype=torch.float)  # np.float32
         
-        forcings_temp = np.empty((num_patch, framesteps, self.act_channels, self.patch_size, self.patch_size),
-                                  dtype=np.float32)  # np.float32
+        forcings_temp = torch.empty((num_patch, framesteps, self.act_channels, self.patch_size, self.patch_size),
+                                     dtype=torch.float)  # np.float32
         
-        targets_temp = np.empty((num_patch, framesteps, self.img_channels, self.patch_size, self.patch_size),
-                                 dtype=np.float32)  # np.float32
+        targets_temp = torch.empty((num_patch, framesteps, self.img_channels, self.patch_size, self.patch_size),
+                                    dtype=torch.float)  # np.float32
 
         # static
         static_inputs_name = self.static_inputs_path
-        frame_im = read_pfb(get_absolute_path(static_inputs_name))
-        frame_im = np.expand_dims(np.expand_dims(frame_im, axis=0), axis=0)
-        frame_np = preprocess.reshape_patch(frame_im, self.patch_size)
-        # static_inputs_temp[:,0,:,:,:] = frame_np.astype(np.float32)
-        static_inputs_temp = frame_np.astype(np.float32)
+        frame_np = read_pfb(get_absolute_path(static_inputs_name)).astype(np.float32)
+        frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
+        static_inputs_temp[:,0,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
         
         # initial
         init_cond_name = self.init_cond_path
-        frame_im = read_pfb(get_absolute_path(init_cond_name))
-        frame_im = np.expand_dims(np.expand_dims(frame_im, axis=0), axis=0)
-        frame_np = preprocess.reshape_patch(frame_im, self.patch_size)
-        # init_cond_temp[0,0,:,:,:] = frame_np.astype(np.float32)
-        init_cond_temp[0:num_patch,:,:,:,:] = frame_np.astype(np.float32)
+        frame_np = read_pfb(get_absolute_path(init_cond_name)).astype(np.float32)
+        frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
+        init_cond[0:num_patch,0,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
                 
         # read forcings and targets
         count = 0
         for i in range(framesteps):
             
-            forcings_name = self.forcings_path + str(i+start_step).zfill(5) + ".pfb"
-            frame_im = read_pfb(get_absolute_path(forcings_name))
-            frame_im = np.expand_dims(np.expand_dims(frame_im, axis=0), axis=0)
-            frame_np = preprocess.reshape_patch(frame_im, self.patch_size)
-            forcings_temp[:,i,:,:,:] = frame_np.astype(np.float32)
+            forcings_name = self.forcings_path + str(i+self.start_step).zfill(5) + ".pfb"
+            frame_np = read_pfb(get_absolute_path(forcings_name)).astype(np.float32)
+            frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
+            forcings_temp[:,i,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
 
-            targets_name = self.targets_path + str(i+start_step).zfill(5) + ".pfb"
-            frame_im = read_pfb(get_absolute_path(targets_name))
-            frame_im = np.expand_dims(np.expand_dims(frame_im, axis=0), axis=0)
-            frame_np = preprocess.reshape_patch(frame_im, self.patch_size)
-            targets_temp[:,i,:,:,:] = frame_np.astype(np.float32)
+            targets_name = self.targets_path + str(i+self.start_step).zfill(5) + ".pfb"
+            frame_np = read_pfb(get_absolute_path(targets_name)).astype(np.float32)
+            frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
+            targets_temp[:,i,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
             
             if ((i+1) % self.input_length == 0) and (i+1 != framesteps) :
                 count = count + 1
-                init_cond_data[num_patch*count:num_patch*(count+1),0,:,:,:] \
-                    = frame_np.astype(np.float32)
+                init_cond[num_patch*count:num_patch*(count+1),0,:,:,:] \
+                    = targets_temp[:,i,:,:,:]
                 
         # reshape forcings and targets
-        frocings_data = np.reshape(forcings_temp, (num_patch*num_seq,
-                                                    input_length, self.act_channels, 
-                                                     self.patch_size, self.patch_size))
+        forcings = torch.split(forcings_temp, self.input_length, dim = 1)
+        forcings = torch.cat(forcings, dim = 0).to(self.input_param.device)
             
-        targets_data = np.reshape(targets_temp, (num_patch*num_seq,
-                                                  input_length, self.act_channels, 
-                                                   self.patch_size, self.patch_size))
-        
-        init_cond = torch.FloatTensor(init_cond).to(self.configs.device)
-        static_inputs_tensor = torch.FloatTensor(static_inputs).to(self.configs.device)
-        forcings = torch.FloatTensor(forcings).to(self.configs.device)
-        targets = torch.FloatTensor(targets).to(self.configs.device)
+        targets = torch.split(targets_temp, self.input_length, dim = 1)
+        targets = torch.cat(targets, dim = 0).to(self.input_param.device)
         
         # repeat static
-        static_inputs = static_inputs_tensor.repeat(num_seq,1,1,1,1)
-                
+        static_inputs = static_inputs_temp.repeat(num_seq,1,1,1,1).to(self.input_param.device)
+        init_cond = init_cond.to(self.input_param.device)
+                 
         return init_cond, static_inputs, forcings, targets, num_patch*num_seq
 
     def get_train_input_handle(self):

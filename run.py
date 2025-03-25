@@ -32,6 +32,12 @@ parser.add_argument('--img_channel', type=int, default=1)
 parser.add_argument('--init_cond_path', type=str, default='')
 parser.add_argument('--init_cond_filename', type=str, default='')
 
+
+        self.init_cond_channels = configs.init_cond_channels
+        self.static_channels = configs.static_channels
+        self.act_channels = configs.act_channels
+        self.img_channels = configs.img_channels
+
 # model
 parser.add_argument('--model_name', type=str, default='predrnn')
 parser.add_argument('--pretrained_model', type=str, default='')
