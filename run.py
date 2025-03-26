@@ -77,7 +77,7 @@ parser.add_argument('--decouple_beta', type=float, default=0.1)
 # optimization
 parser.add_argument('--lr', type=float, default=0.001)
 # parser.add_argument('--reverse_input', type=int, default=1)
-parser.add_argument('--batch_size', type=int, default=8)
+parser.add_argument('--batch_size', type=int, default=8) # place holder when test
 parser.add_argument('--max_iterations', type=int, default=80000) # how many batches
 parser.add_argument('--display_interval', type=int, default=100) # print loss
 parser.add_argument('--test_interval', type=int, default=5000) # run test in training
