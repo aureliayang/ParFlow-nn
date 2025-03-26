@@ -13,7 +13,10 @@ class InputHandle:
     def __init__(self, init_cond, static_inputs, forcings, targets, total_seq, configs):
         self.configs = configs
         self.name = configs.pf_runname
-        self.batch_size = configs.batch_size
+        if configs.is_training:
+            self.batch_size = configs.batch_size
+        else:
+            self.batch_size = total_seq
         self.img_width = configs.patch_size
         self.init_cond = init_cond
         self.static_inputs = static_inputs
@@ -129,7 +132,7 @@ class DataProcess:
         # drop the residual cells
         num_patch_y = self.img_height // self.patch_size 
         num_patch_x = self.img_width // self.patch_size
-        num_patch = num_patch_x*num_patch_y
+        num_patch = num_patch_x * num_patch_y
         # drop the residual steps
         num_seq = self.timesteps // self.input_length
         framesteps = num_seq * self.input_length
@@ -149,7 +152,7 @@ class DataProcess:
         # static
         static_inputs_name = self.static_inputs_path
         frame_np = read_pfb(get_absolute_path(static_inputs_name)).astype(np.float32)
-        frame_np = frame_np[:, num_patch_y*self.patch_size, num_patch_x*self.patch_size]
+        frame_np = frame_np[:, num_patch_y*self.patch_size, num_patch_x*self.patch_size] # drop off
         frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
         static_inputs_temp[:,0,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
         

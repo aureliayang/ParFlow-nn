@@ -78,11 +78,11 @@ parser.add_argument('--decouple_beta', type=float, default=0.1)
 parser.add_argument('--lr', type=float, default=0.001)
 # parser.add_argument('--reverse_input', type=int, default=1)
 parser.add_argument('--batch_size', type=int, default=8)
-parser.add_argument('--max_iterations', type=int, default=80000) #how many batches
-parser.add_argument('--display_interval', type=int, default=100)
-parser.add_argument('--test_interval', type=int, default=5000)
-parser.add_argument('--snapshot_interval', type=int, default=5000)
-parser.add_argument('--num_save_samples', type=int, default=10)
+parser.add_argument('--max_iterations', type=int, default=80000) # how many batches
+parser.add_argument('--display_interval', type=int, default=100) # print loss
+parser.add_argument('--test_interval', type=int, default=5000) # run test in training
+parser.add_argument('--snapshot_interval', type=int, default=5000) # save model
+# parser.add_argument('--num_save_samples', type=int, default=10)
 # parser.add_argument('--n_gpu', type=int, default=1)
 
 # # visualization of memory decoupling
@@ -129,9 +129,7 @@ def train_wrapper(model):
 
 def test_wrapper(model):
     model.load(args.pretrained_model)
-    test_input_handle = datasets_factory.data_provider(
-        args.dataset_name, args.train_data_paths, args.valid_data_paths, args.batch_size, args.img_width,
-        seq_length=args.total_length, injection_action=args.injection_action, is_training=False)
+    test_input_handle = datasets_factory.data_provider(args)
     trainer.test(model, test_input_handle, args, 'test_result')
 
 if os.path.exists(args.save_dir):
