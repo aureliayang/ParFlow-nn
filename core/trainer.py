@@ -27,7 +27,7 @@ def test(model, test_input_handle, configs, itr):
     test_input_handle.begin(do_shuffle=False)
     res_path = os.path.join(configs.gen_frm_dir, str(itr))
     os.mkdir(res_path)
-    batch_id = 0  # actually, only one batch
+    batch_id = 0  # actually, only one batch when test
 
     while (test_input_handle.no_batch_left() == False):
         batch_id = batch_id + 1
