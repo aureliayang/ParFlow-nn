@@ -10,10 +10,10 @@ from parflow.tools.io import write_pfb, read_pfb
 logger = logging.getLogger(__name__)
 
 class InputHandle:
-    def __init__(self, init_cond, static_inputs, forcings, targets, total_seq, configs):
+    def __init__(self, init_cond, static_inputs, forcings, targets, total_seq, configs, mode):
         self.configs = configs
         self.name = configs.pf_runname
-        if configs.is_training:
+        if mode == 'train':
             self.batch_size = configs.batch_size
         else:
             self.batch_size = total_seq
@@ -106,14 +106,10 @@ class DataProcess:
         self.targets_path = os.path.join(configs.targets_path, targets_filename) 
         
         # the files should be continuous in time
-        if configs.is_training:
-            self.start_step = configs.training_start_step
-            self.end_step   = configs.training_end_step
-            self.timesteps  = configs.training_end_step - configs.training_start_step + 1
-        else:
-            self.start_step = configs.test_start_step
-            self.end_step   = configs.test_end_step
-            self.timesteps  = configs.test_end_step - configs.test_start_step + 1
+        self.training_start_step = configs.training_start_step
+        self.training_timesteps  = configs.training_end_step - configs.training_start_step + 1
+        self.test_start_step = configs.test_start_step
+        self.test_timesteps  = configs.test_end_step - configs.test_start_step + 1
         
         # the RNN length
         self.input_length = configs.input_length
@@ -132,13 +128,19 @@ class DataProcess:
     def load_data(self, mode='train'):
         
         # model is no use, but keep it here and can be removed later
+        if mode == 'train':
+            start_step = self.training_start_step
+            timesteps  = self.training_timesteps
+        else:
+            start_step = self.test_start_step
+            timesteps  = self.test_timesteps
         
         # drop the residual cells
         num_patch_y = self.img_height // self.patch_size 
         num_patch_x = self.img_width // self.patch_size
         num_patch = num_patch_x * num_patch_y
         # drop the residual steps
-        num_seq = self.timesteps // self.input_length
+        num_seq = timesteps // self.input_length
         framesteps = num_seq * self.input_length
         
         init_cond = torch.empty((num_patch*num_seq, 1, self.init_cond_channel, self.patch_size, self.patch_size),
@@ -171,13 +173,13 @@ class DataProcess:
         count = 0
         for i in range(framesteps):
             
-            forcings_name = self.forcings_path + str(i+self.start_step).zfill(5) + ".pfb"
+            forcings_name = self.forcings_path + str(i+start_step).zfill(5) + ".pfb"
             frame_np = read_pfb(get_absolute_path(forcings_name)).astype(np.float32)
             frame_np = frame_np[6:10, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
             forcings_temp[:,i:i+1,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
 
-            targets_name = self.targets_path + str(i+self.start_step).zfill(5) + ".pfb"
+            targets_name = self.targets_path + str(i+start_step).zfill(5) + ".pfb"
             frame_np = read_pfb(get_absolute_path(targets_name)).astype(np.float32)
             frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
@@ -204,11 +206,11 @@ class DataProcess:
         init_cond, static_inputs, forcings, targets, total_seq \
             = self.load_data(mode='train')
         return InputHandle(init_cond, static_inputs, forcings, targets, 
-                           total_seq, self.input_param)
+                           total_seq, self.input_param, mode='train')
 
     def get_test_input_handle(self):
         init_cond, static_inputs, forcings, targets, total_seq \
             = self.load_data(mode='test')
         return InputHandle(init_cond, static_inputs, forcings, targets, 
-                           total_seq, self.input_param)
+                           total_seq, self.input_param, mode='test')
 

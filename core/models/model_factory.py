@@ -54,5 +54,7 @@ class Model(object):
     def test(self, forcings, init_cond, static_inputs, targets):
         # frames_tensor = torch.FloatTensor(frames).to(self.configs.device)
         # mask_tensor = torch.FloatTensor(mask).to(self.configs.device)
-        next_frames, _ = self.network(forcings, init_cond, static_inputs, targets)
-        return next_frames.detach().cpu().numpy()
+        with torch.no_grad():
+            next_frames, _ = self.network(forcings, init_cond, static_inputs, targets)
+        # return next_frames.detach().cpu().numpy()
+        return next_frames

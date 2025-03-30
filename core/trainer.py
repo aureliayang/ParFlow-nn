@@ -40,11 +40,21 @@ def test(model, test_input_handle, configs, itr):
         num_seq = (configs.test_end_step - configs.test_start_step + 1) // configs.input_length
         num_patch_y = configs.img_height // configs.patch_size 
         num_patch_x = configs.img_width // configs.patch_size
+
         img_gen = preprocess.reshape_patch_back_time(img_gen, num_patch_x*num_patch_y)
         img_gen = preprocess.reshape_patch_back(img_gen, num_patch_x, num_patch_y)
-        img_gen = torch.squeeze(img_gen).numpy()
+        img_gen = torch.squeeze(img_gen.detach().cpu()).numpy().astype(np.float64)
+
+        img_tar = preprocess.reshape_patch_back_time(targets, num_patch_x*num_patch_y)
+        img_tar = preprocess.reshape_patch_back(img_tar, num_patch_x, num_patch_y)
+        img_tar = torch.squeeze(img_tar.detach().cpu()).numpy().astype(np.float64)
+
         for i in range(num_seq*configs.input_length):
             file_name = 'nn_gen.press.' + str(i+configs.test_start_step).zfill(5) + '.pfb'
+            file_name = os.path.join(path, file_name)
             write_pfb(file_name, img_gen[i,:,:,:], dist=False)
+            file_name = 'nn_tar.press.' + str(i+configs.test_start_step).zfill(5) + '.pfb'
+            file_name = os.path.join(path, file_name)
+            write_pfb(file_name, img_tar[i,:,:,:], dist=False)
         test_input_handle.next()
 

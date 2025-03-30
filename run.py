@@ -50,7 +50,7 @@ parser.add_argument('--act_channel', type=int, default=4)
 parser.add_argument('--img_channel', type=int, default=10)
 
 #CNN
-parser.add_argument('--num_hidden', type=str, default='16,16')
+parser.add_argument('--num_hidden', type=str, default='32,32,32')
 parser.add_argument('--filter_size', type=int, default=5)
 parser.add_argument('--stride', type=int, default=1)
 parser.add_argument('--input_length', type=int, default=10)
@@ -87,12 +87,12 @@ def train_wrapper(model):
 
         trainer.train(model, forcings, init_cond, static_inputs, targets, args, itr)
 
-        # if itr % args.snapshot_interval == 0:
-        #     model.save(itr)
+        if itr % args.snapshot_interval == 0:
+            model.save(itr)
 
         # we will not test during training currently, will do in the future
-        # if itr % args.test_interval == 0:
-        #     trainer.test(model, test_input_handle, args, itr)
+        if itr % args.test_interval == 0:
+            trainer.test(model, test_input_handle, args, itr)
 
         train_input_handle.next()
 
