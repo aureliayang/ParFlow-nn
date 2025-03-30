@@ -49,7 +49,7 @@ class InputHandle:
             return None
 
     def no_batch_left(self):
-        if self.current_p + self.batch_size >= self.total():
+        if self.current_p + self.batch_size > self.total():
             return True
         else:
             return False
@@ -173,7 +173,7 @@ class DataProcess:
             
             forcings_name = self.forcings_path + str(i+self.start_step).zfill(5) + ".pfb"
             frame_np = read_pfb(get_absolute_path(forcings_name)).astype(np.float32)
-            frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
+            frame_np = frame_np[6:10, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
             forcings_temp[:,i:i+1,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
 
