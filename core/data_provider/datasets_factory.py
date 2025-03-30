@@ -2,8 +2,6 @@ from core.data_provider import pfnn
 # , bair
 
 datasets_map = {
-    'mnist': mnist,
-    'action': kth_action,
     'pfnn': pfnn
     # 'bair': bair,
 }

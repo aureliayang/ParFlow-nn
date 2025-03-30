@@ -40,7 +40,7 @@ def test(model, test_input_handle, configs, itr):
         num_seq = (configs.test_end_step - configs.test_start_step + 1) // configs.input_length
         num_patch_y = configs.img_height // configs.patch_size 
         num_patch_x = configs.img_width // configs.patch_size
-        img_gen = preprocess.reshape_patch_back_time(img_gen, num_seq)
+        img_gen = preprocess.reshape_patch_back_time(img_gen, num_patch_x*num_patch_y)
         img_gen = preprocess.reshape_patch_back(img_gen, num_patch_x, num_patch_y)
         img_gen = torch.squeeze(img_gen).numpy()
         for i in range(num_seq*configs.input_length):

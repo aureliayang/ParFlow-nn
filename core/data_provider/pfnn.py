@@ -25,6 +25,10 @@ class InputHandle:
         self.total_seq = total_seq
         self.current_p = 0
         self.input_length = configs.input_length
+        self.init_cond_channel = configs.init_cond_channel
+        self.static_channel = configs.static_channel
+        self.act_channel = configs.act_channel
+        self.img_channel = configs.img_channel
 
     def total(self):
         return self.total_seq
@@ -57,13 +61,13 @@ class InputHandle:
                 ". Consider to user iterators.begin() to rescan from the beginning of the iterators")
             return None
 
-        init_cond_batch     = torch.zeros(self.batch_size, 1, self.init_cond_channels, 
+        init_cond_batch     = torch.zeros(self.batch_size, 1, self.init_cond_channel,
                                           self.img_width, self.img_width).to(self.configs.device)
-        static_inputs_batch = torch.zeros(self.batch_size, 1, self.static_inputs_channels,
+        static_inputs_batch = torch.zeros(self.batch_size, 1, self.static_channel,
                                           self.img_width, self.img_width).to(self.configs.device)
-        forcings_batch       = torch.zeros(self.batch_size, self.input_length, self.act_channels,
+        forcings_batch       = torch.zeros(self.batch_size, self.input_length, self.act_channel,
                                           self.img_width, self.img_width).to(self.configs.device)
-        targets_batch       = torch.zeros(self.batch_size, self.input_length, self.img_channels,
+        targets_batch       = torch.zeros(self.batch_size, self.input_length, self.img_channel,
                                           self.img_width, self.img_width).to(self.configs.device)
 
         init_cond_batch = self.init_cond[self.current_p:self.current_p + self.batch_size, :, :, :, :]
@@ -120,10 +124,10 @@ class DataProcess:
         self.img_width  = configs.img_width
         self.patch_size = configs.patch_size
         
-        self.init_cond_channels = configs.init_cond_channels
-        self.static_channels = configs.static_channels
-        self.act_channels = configs.act_channels
-        self.img_channels = configs.img_channels
+        self.init_cond_channel = configs.init_cond_channel
+        self.static_channel = configs.static_channel
+        self.act_channel = configs.act_channel
+        self.img_channel = configs.img_channel
         
     def load_data(self, mode='train'):
         
@@ -137,31 +141,31 @@ class DataProcess:
         num_seq = self.timesteps // self.input_length
         framesteps = num_seq * self.input_length
         
-        init_cond = torch.empty((num_patch*num_seq, 1, self.init_cond_channels, self.patch_size, self.patch_size),
+        init_cond = torch.empty((num_patch*num_seq, 1, self.init_cond_channel, self.patch_size, self.patch_size),
                                  dtype=torch.float)  # np.float32
         
-        static_inputs_temp = torch.empty((num_patch, 1, self.static_channels, self.patch_size, self.patch_size),
+        static_inputs_temp = torch.empty((num_patch, 1, self.static_channel, self.patch_size, self.patch_size),
                                           dtype=torch.float)  # np.float32
         
-        forcings_temp = torch.empty((num_patch, framesteps, self.act_channels, self.patch_size, self.patch_size),
+        forcings_temp = torch.empty((num_patch, framesteps, self.act_channel, self.patch_size, self.patch_size),
                                      dtype=torch.float)  # np.float32
         
-        targets_temp = torch.empty((num_patch, framesteps, self.img_channels, self.patch_size, self.patch_size),
+        targets_temp = torch.empty((num_patch, framesteps, self.img_channel, self.patch_size, self.patch_size),
                                     dtype=torch.float)  # np.float32
 
         # static
         static_inputs_name = self.static_inputs_path
         frame_np = read_pfb(get_absolute_path(static_inputs_name)).astype(np.float32)
-        frame_np = frame_np[:, num_patch_y*self.patch_size, num_patch_x*self.patch_size] # drop off
+        frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size] # drop off
         frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
-        static_inputs_temp[:,0,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
+        static_inputs_temp[:,:,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
         
         # initial
         init_cond_name = self.init_cond_path
         frame_np = read_pfb(get_absolute_path(init_cond_name)).astype(np.float32)
-        frame_np = frame_np[:, num_patch_y*self.patch_size, num_patch_x*self.patch_size]
+        frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
         frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
-        init_cond[0:num_patch,0,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
+        init_cond[0:num_patch,:,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
                 
         # read forcings and targets
         count = 0
@@ -169,15 +173,15 @@ class DataProcess:
             
             forcings_name = self.forcings_path + str(i+self.start_step).zfill(5) + ".pfb"
             frame_np = read_pfb(get_absolute_path(forcings_name)).astype(np.float32)
-            frame_np = frame_np[:, num_patch_y*self.patch_size, num_patch_x*self.patch_size]
+            frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
-            forcings_temp[:,i,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
+            forcings_temp[:,i:i+1,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
 
             targets_name = self.targets_path + str(i+self.start_step).zfill(5) + ".pfb"
             frame_np = read_pfb(get_absolute_path(targets_name)).astype(np.float32)
-            frame_np = frame_np[:, num_patch_y*self.patch_size, num_patch_x*self.patch_size]
+            frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
-            targets_temp[:,i,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
+            targets_temp[:,i:i+1,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
             
             if ((i+1) % self.input_length == 0) and (i+1 != framesteps) :
                 count = count + 1
@@ -185,12 +189,8 @@ class DataProcess:
                     = targets_temp[:,i,:,:,:]
                 
         # # reshape forcings and targets
-        # forcings = torch.split(forcings_temp, self.input_length, dim = 1)
-        # forcings = torch.cat(forcings, dim = 0).to(self.input_param.device)
         forcings = preprocess.reshape_patch_time(forcings_temp, self.input_length)
         forcings = forcings.to(self.input_param.device)    
-        # targets = torch.split(targets_temp, self.input_length, dim = 1)
-        # targets = torch.cat(targets, dim = 0).to(self.input_param.device)
         targets = preprocess.reshape_patch_time(targets_temp, self.input_length)
         targets = targets.to(self.input_param.device)
         

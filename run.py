@@ -43,11 +43,11 @@ parser.add_argument('--static_inputs_filename', type=str, default='')
 parser.add_argument('--forcings_path', type=str, default='')
 parser.add_argument('--targets_path', type=str, default='')
 
-#channels
-parser.add_argument('--init_cond_channels', type=int, default=10)
-parser.add_argument('--static_channels', type=int, default=15)
-parser.add_argument('--act_channels', type=int, default=4)
-parser.add_argument('--img_channels', type=int, default=10)
+#channel
+parser.add_argument('--init_cond_channel', type=int, default=10)
+parser.add_argument('--static_channel', type=int, default=15)
+parser.add_argument('--act_channel', type=int, default=4)
+parser.add_argument('--img_channel', type=int, default=10)
 
 #CNN
 parser.add_argument('--num_hidden', type=str, default='16,16')
@@ -85,10 +85,10 @@ def train_wrapper(model):
             train_input_handle.begin(do_shuffle=True)
         forcings, init_cond, static_inputs, targets = train_input_handle.get_batch()
 
-        trainer.train(model, forcings, init_cond, static_inputs, targets, args, itr)
+        # trainer.train(model, forcings, init_cond, static_inputs, targets, args, itr)
 
-        if itr % args.snapshot_interval == 0:
-            model.save(itr)
+        # if itr % args.snapshot_interval == 0:
+        #     model.save(itr)
 
         # we will not test during training currently, will do in the future
         # if itr % args.test_interval == 0:

@@ -20,9 +20,9 @@ def reshape_patch_back(patch_tensor, num_x, num_y):
     # batch_size, seq_length, num_channels, img_height, img_width \
     #     = patch_tensor.shape
     
-    a = torch.split(patch_tensor, num_y, dim = 0)
+    a = torch.split(patch_tensor, num_x, dim = 0)
     b = torch.cat(a, dim = 3)
-    c = torch.split(b, num_x, dim = 0)
+    c = torch.split(b, 1, dim = 0)
     img_tensor = torch.cat(c, dim = 4)
 
     return img_tensor
@@ -37,12 +37,12 @@ def reshape_patch_time(img_tensor, input_length):
 
     return patch_tensor
 
-def reshape_patch_back_time(patch_tensor, num_seq):
+def reshape_patch_back_time(patch_tensor, num_patch):
     assert 5 == patch_tensor.ndim
     # batch_size, seq_length, num_channels, img_height, img_width \
     #     = patch_tensor.shape
     
-    a = torch.split(patch_tensor, num_seq, dim = 0)
+    a = torch.split(patch_tensor, num_patch, dim = 0)
     img_tensor = torch.cat(a, dim = 1)
 
     return img_tensor
