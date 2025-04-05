@@ -36,6 +36,14 @@ class RNN(nn.Module):
         
         self.cell_encoder = nn.Conv2d(configs.static_channel, sum(num_hidden), kernel_size=1, bias=True)
 
+        # self.embed_dim = num_hidden[num_layers - 1]*configs.patch_size*configs.patch_size
+        # self.attention = nn.MultiheadAttention(embed_dim = self.embed_dim, num_heads=8,
+        #                                        batch_first=True, dropout=0.1)
+
+        self.embed_dim = configs.img_channel*configs.patch_size*configs.patch_size
+        self.attention = nn.MultiheadAttention(embed_dim = self.embed_dim, num_heads=8,
+                                               batch_first=True, dropout=0.1)
+
     def forward(self, forcings, init_cond, static_inputs, targets):
 
         batch, timesteps, channels, height, width = forcings.shape
@@ -58,6 +66,7 @@ class RNN(nn.Module):
         c_t = list(torch.split(self.cell_encoder(static_inputs[:, 0]), self.num_hidden, dim=1))
         
         net = init_cond[:, 0]
+        net_temp = []
         for t in range(timesteps):
             action = forcings[:, t]
             h_t[0], c_t[0], memory, delta_c, delta_m = self.cell_list[0](net, action, h_t[0], c_t[0], memory)
@@ -71,7 +80,21 @@ class RNN(nn.Module):
                 decouple_loss.append(torch.mean(torch.abs(
                              torch.cosine_similarity(delta_c_list[i], delta_m_list[i], dim=2))))
  
-            net = self.conv_last(h_t[self.num_layers - 1]) + net
+            # output = torch.reshape(h_t[self.num_layers - 1],(batch,1,self.embed_dim))
+            # net_temp += [output]
+            # net_cat = torch.cat(net_temp,1)
+            # attn_output, attn_weights = self.attention(output, net_cat, net_cat)
+            # attn_output = torch.reshape(attn_output,(batch, self.num_hidden[self.num_layers - 1], height, width))
+            # net = self.conv_last(attn_output) + net
+
+            output = torch.reshape(self.conv_last(h_t[self.num_layers - 1]),(batch,1,self.embed_dim))
+            net_temp += [output]
+            net_cat = torch.cat(net_temp,1)
+            attn_output, attn_weights = self.attention(output, net_cat, net_cat)
+            attn_output = torch.reshape(attn_output,(batch, self.configs.img_channel, height, width))
+            net = attn_output + net
+
+            # net = self.conv_last(h_t[self.num_layers - 1]) + net
             next_frames.append(net)
 
         decouple_loss = torch.mean(torch.stack(decouple_loss, dim=0))
