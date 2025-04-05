@@ -8,14 +8,14 @@ python -u run.py \
     --model_name predrnn_pf \
     --save_dir checkpoints/pfnn_predrnn \
     --gen_frm_dir results/pfnn_predrnn \
-    --training_start_step 1 \
-    --training_end_step 240 \
-    --test_start_step 301 \
-    --test_end_step 320 \
+    --training_start_step 201 \
+    --training_end_step 400 \
+    --test_start_step 1001 \
+    --test_end_step 1020 \
     --img_height 146 \
     --img_width 252 \
     --init_cond_path /home/aurelia/parflow-nn/standard_2018/output_press \
-    --init_cond_filename a1_run_5.out.press.00000.pfb \
+    --init_cond_filename a1_run_5.out.press.00200.pfb \
     --static_inputs_path /home/aurelia/parflow-nn/standard_2018/subsurface_data \
     --static_inputs_filename static_inputs_combined.pfb \
     --forcings_path /home/aurelia/parflow-nn/standard_2018/output_evapotrans \
@@ -30,7 +30,7 @@ python -u run.py \
     --batch_size 8 \
     --max_iterations 5000 \
     --display_interval 50 \
-    --test_interval 1000 \
+    --test_interval 5000 \
     --snapshot_interval 5000 \
     # --pretrained_model /home/aurelia/parflow-nn/predrnn-pytorch-master/checkpoints_1/pfnn_predrnn/model.ckpt-10000
     # --reverse_input 1 \

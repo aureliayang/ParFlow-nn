@@ -43,6 +43,7 @@ class RNN(nn.Module):
         self.embed_dim = configs.img_channel*configs.patch_size*configs.patch_size
         self.attention = nn.MultiheadAttention(embed_dim = self.embed_dim, num_heads=8,
                                                batch_first=True, dropout=0.1)
+        self.scale = nn.Parameter(torch.zeros(1))
 
     def forward(self, forcings, init_cond, static_inputs, targets):
 
@@ -85,14 +86,14 @@ class RNN(nn.Module):
             # net_cat = torch.cat(net_temp,1)
             # attn_output, attn_weights = self.attention(output, net_cat, net_cat)
             # attn_output = torch.reshape(attn_output,(batch, self.num_hidden[self.num_layers - 1], height, width))
-            # net = self.conv_last(attn_output) + net
+            # net = self.scale * self.conv_last(attn_output) + net
 
             output = torch.reshape(self.conv_last(h_t[self.num_layers - 1]),(batch,1,self.embed_dim))
             net_temp += [output]
             net_cat = torch.cat(net_temp,1)
             attn_output, attn_weights = self.attention(output, net_cat, net_cat)
             attn_output = torch.reshape(attn_output,(batch, self.configs.img_channel, height, width))
-            net = attn_output + net
+            net = self.scale * attn_output + net
 
             # net = self.conv_last(h_t[self.num_layers - 1]) + net
             next_frames.append(net)

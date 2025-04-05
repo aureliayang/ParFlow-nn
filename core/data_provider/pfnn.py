@@ -160,6 +160,9 @@ class DataProcess:
         frame_np = read_pfb(get_absolute_path(static_inputs_name)).astype(np.float32)
         frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size] # drop off
         frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
+        mean = frame_im.mean(dim=(3,4), keepdim=True)
+        std = frame_im.std(dim=(3,4), keepdim=True)
+        frame_im = (frame_im-mean)/std
         static_inputs_temp[:,:,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
         
         # initial
@@ -167,7 +170,17 @@ class DataProcess:
         frame_np = read_pfb(get_absolute_path(init_cond_name)).astype(np.float32)
         frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
         frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
+        mean = frame_im.mean(dim=(3,4), keepdim=True)
+        std = frame_im.std(dim=(3,4), keepdim=True)
+        frame_im = (frame_im-mean)/std
         init_cond[0:num_patch,:,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
+
+        forcings_name = self.forcings_path + str(8760).zfill(5) + ".pfb"
+        frame_np = read_pfb(get_absolute_path(forcings_name)).astype(np.float32)
+        frame_np = frame_np[6:10, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
+        frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
+        mean_a = frame_im.mean(dim=(3,4), keepdim=True)
+        std_a = frame_im.std(dim=(3,4), keepdim=True)
                 
         # read forcings and targets
         count = 0
@@ -177,12 +190,14 @@ class DataProcess:
             frame_np = read_pfb(get_absolute_path(forcings_name)).astype(np.float32)
             frame_np = frame_np[6:10, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
+            frame_im = (frame_im-mean_a)/std_a
             forcings_temp[:,i:i+1,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
 
             targets_name = self.targets_path + str(i+start_step).zfill(5) + ".pfb"
             frame_np = read_pfb(get_absolute_path(targets_name)).astype(np.float32)
             frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
+            frame_im = (frame_im-mean)/std
             targets_temp[:,i:i+1,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
             
             if ((i+1) % self.input_length == 0) and (i+1 != framesteps) :
