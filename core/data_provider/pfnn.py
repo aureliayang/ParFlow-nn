@@ -181,12 +181,17 @@ class DataProcess:
         std_a = frame_im.std(dim=(3,4), keepdim=True)
 
         # initial
-        init_cond_name = self.init_cond_path
+        if mode == 'train':
+            init_cond_name = self.init_cond_path
+        else:
+            init_cond_name = '/home/aurelia/parflow-nn/standard_2018/output_press/a1_run_5.out.press.01000.pfb'
+
         frame_np = read_pfb(get_absolute_path(init_cond_name)).astype(np.float32)
         frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
         frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
         frame_im = (frame_im-mean_p)/std_p
         init_cond[0:num_patch,:,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
+
 
         # read forcings and targets
         count = 0
