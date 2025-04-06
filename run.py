@@ -42,6 +42,8 @@ parser.add_argument('--static_inputs_path', type=str, default='')
 parser.add_argument('--static_inputs_filename', type=str, default='')
 parser.add_argument('--forcings_path', type=str, default='')
 parser.add_argument('--targets_path', type=str, default='')
+parser.add_argument('--target_norm_file', type=str, default='')
+parser.add_argument('--force_norm_file', type=str, default='')
 
 #channel
 parser.add_argument('--init_cond_channel', type=int, default=10)

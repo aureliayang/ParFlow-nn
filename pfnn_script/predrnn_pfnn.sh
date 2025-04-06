@@ -9,7 +9,7 @@ python -u run.py \
     --save_dir checkpoints/pfnn_predrnn \
     --gen_frm_dir results/pfnn_predrnn \
     --training_start_step 201 \
-    --training_end_step 400 \
+    --training_end_step 800 \
     --test_start_step 1001 \
     --test_end_step 1020 \
     --img_height 146 \
@@ -20,6 +20,8 @@ python -u run.py \
     --static_inputs_filename static_inputs_combined.pfb \
     --forcings_path /home/aurelia/parflow-nn/standard_2018/output_evapotrans \
     --targets_path /home/aurelia/parflow-nn/standard_2018/output_press \
+    --force_norm_file a1_run_5.out.evaptrans.00200.pfb \
+    --target_norm_file a1_run_5.out.press.00200.pfb \
     --init_cond_channel 10 \
     --static_channel 16 \
     --act_channel 4 \

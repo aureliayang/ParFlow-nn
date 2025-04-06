@@ -104,6 +104,9 @@ class DataProcess:
         
         targets_filename = configs.pf_runname + ".out.press."
         self.targets_path = os.path.join(configs.targets_path, targets_filename) 
+
+        self.target_norm_path = os.path.join(configs.targets_path,configs.target_norm_file)
+        self.force_norm_path = os.path.join(configs.forcings_path,configs.force_norm_file)
         
         # the files should be continuous in time
         self.training_start_step = configs.training_start_step
@@ -175,7 +178,14 @@ class DataProcess:
         frame_im = (frame_im-mean)/std
         init_cond[0:num_patch,:,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
 
-        forcings_name = self.forcings_path + str(8760).zfill(5) + ".pfb"
+        press_name = self.target_norm_path
+        frame_np = read_pfb(get_absolute_path(press_name)).astype(np.float32)
+        frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
+        frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
+        mean_p = frame_im.mean(dim=(3,4), keepdim=True)
+        std_p = frame_im.std(dim=(3,4), keepdim=True)
+
+        forcings_name = self.force_norm_path
         frame_np = read_pfb(get_absolute_path(forcings_name)).astype(np.float32)
         frame_np = frame_np[6:10, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
         frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
@@ -197,7 +207,7 @@ class DataProcess:
             frame_np = read_pfb(get_absolute_path(targets_name)).astype(np.float32)
             frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
-            frame_im = (frame_im-mean)/std
+            frame_im = (frame_im-mean_p)/std_p
             targets_temp[:,i:i+1,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
             
             if ((i+1) % self.input_length == 0) and (i+1 != framesteps) :
