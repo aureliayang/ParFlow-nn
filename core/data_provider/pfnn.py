@@ -167,31 +167,27 @@ class DataProcess:
         std = frame_im.std(dim=(3,4), keepdim=True)
         frame_im = (frame_im-mean)/std
         static_inputs_temp[:,:,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
-        
-        # initial
-        init_cond_name = self.init_cond_path
-        frame_np = read_pfb(get_absolute_path(init_cond_name)).astype(np.float32)
-        frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
-        frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
-        mean = frame_im.mean(dim=(3,4), keepdim=True)
-        std = frame_im.std(dim=(3,4), keepdim=True)
-        frame_im = (frame_im-mean)/std
-        init_cond[0:num_patch,:,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
 
-        press_name = self.target_norm_path
-        frame_np = read_pfb(get_absolute_path(press_name)).astype(np.float32)
+        frame_np = read_pfb(get_absolute_path(self.target_norm_path)).astype(np.float32)
         frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
         frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
         mean_p = frame_im.mean(dim=(3,4), keepdim=True)
         std_p = frame_im.std(dim=(3,4), keepdim=True)
 
-        forcings_name = self.force_norm_path
-        frame_np = read_pfb(get_absolute_path(forcings_name)).astype(np.float32)
+        frame_np = read_pfb(get_absolute_path(self.force_norm_path)).astype(np.float32)
         frame_np = frame_np[6:10, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
         frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
         mean_a = frame_im.mean(dim=(3,4), keepdim=True)
         std_a = frame_im.std(dim=(3,4), keepdim=True)
-                
+
+        # initial
+        init_cond_name = self.init_cond_path
+        frame_np = read_pfb(get_absolute_path(init_cond_name)).astype(np.float32)
+        frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
+        frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
+        frame_im = (frame_im-mean_p)/std_p
+        init_cond[0:num_patch,:,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
+
         # read forcings and targets
         count = 0
         for i in range(framesteps):

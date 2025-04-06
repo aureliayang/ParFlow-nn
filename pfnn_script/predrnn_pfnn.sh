@@ -11,7 +11,7 @@ python -u run.py \
     --training_start_step 201 \
     --training_end_step 800 \
     --test_start_step 1001 \
-    --test_end_step 1020 \
+    --test_end_step 1200 \
     --img_height 146 \
     --img_width 252 \
     --init_cond_path /home/aurelia/parflow-nn/standard_2018/output_press \
@@ -29,10 +29,10 @@ python -u run.py \
     --input_length 10 \
     --patch_size 16 \
     --lr 0.0003 \
-    --batch_size 8 \
-    --max_iterations 5000 \
-    --display_interval 50 \
-    --test_interval 5000 \
-    --snapshot_interval 5000 \
+    --batch_size 16 \
+    --max_iterations 10000 \
+    --display_interval 100 \
+    --test_interval 1000 \
+    --snapshot_interval 10000 \
     # --pretrained_model /home/aurelia/parflow-nn/predrnn-pytorch-master/checkpoints_1/pfnn_predrnn/model.ckpt-10000
     # --reverse_input 1 \

@@ -88,7 +88,8 @@ class RNN(nn.Module):
             # attn_output = torch.reshape(attn_output,(batch, self.num_hidden[self.num_layers - 1], height, width))
             # net = self.scale * self.conv_last(attn_output) + net
 
-            output = torch.reshape(self.conv_last(h_t[self.num_layers - 1]),(batch,1,self.embed_dim))
+            output = self.conv_last(h_t[self.num_layers - 1])
+            output = torch.reshape(output,(batch,1,self.embed_dim))
             net_temp += [output]
             net_cat = torch.cat(net_temp,1)
             attn_output, attn_weights = self.attention(output, net_cat, net_cat)

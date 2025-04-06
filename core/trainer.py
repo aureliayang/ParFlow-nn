@@ -20,8 +20,8 @@ def train(model, forcings, init_cond, static_inputs, targets, configs, itr):
     #     cost = cost / 2
 
     if itr % configs.display_interval == 0:
-        print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'itr: ' + str(itr))
-        print('training loss: ' + str(cost))
+        print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'itr: ' + str(itr),'training loss: ' + str(cost))
+        # print('training loss: ' + str(cost))
 
 def test(model, test_input_handle, configs, itr):
     print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'test...')
@@ -57,6 +57,8 @@ def test(model, test_input_handle, configs, itr):
         img_tar = preprocess.reshape_patch_back_time(targets, num_patch_x*num_patch_y)
         img_tar = preprocess.reshape_patch_back(img_tar, num_patch_x, num_patch_y)
         img_tar = torch.squeeze((img_tar.detach().cpu())*std_p+mean_p).numpy().astype(np.float64)
+
+        print ('RMSE_TOTAL =', np.sqrt(np.mean((img_gen - img_tar) ** 2)))
 
         for i in range(num_seq*configs.input_length):
             file_name = 'nn_gen.press.' + str(i+configs.test_start_step).zfill(5) + '.pfb'

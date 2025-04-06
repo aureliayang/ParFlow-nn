@@ -3,6 +3,7 @@ __author__ = 'chen yang'
 import os
 import torch
 from torch.optim import AdamW
+from torch.optim import lr_scheduler
 from core.models import predrnn_pf
 # from core.models import predrnn, predrnn_v2, action_cond_predrnn, action_cond_predrnn_v2
 
@@ -25,7 +26,8 @@ class Model(object):
         else:
             raise ValueError('Name of network unknown %s' % configs.model_name)
 
-        self.optimizer = AdamW(self.network.parameters(), lr=configs.lr, betas=[0.8, 0.95])
+        self.optimizer = AdamW(self.network.parameters(), lr=configs.lr, betas=[0.8, 0.95], weight_decay=1e-2)
+        self.scheduler = lr_scheduler.StepLR(self.optimizer, step_size=1000, gamma=0.5)
 
     def save(self, itr):
         stats = {}
@@ -49,6 +51,7 @@ class Model(object):
         next_frames, loss = self.network(forcings, init_cond, static_inputs, targets)
         loss.backward()
         self.optimizer.step()
+        # self.scheduler.step()
         return loss.detach().cpu().numpy()
 
     def test(self, forcings, init_cond, static_inputs, targets):
