@@ -5,6 +5,7 @@ import torch
 from torch.optim import AdamW
 from torch.optim import lr_scheduler
 from core.models import predrnn_pf
+import ctypes
 # from core.models import predrnn, predrnn_v2, action_cond_predrnn, action_cond_predrnn_v2
 
 class Model(object):
@@ -48,16 +49,88 @@ class Model(object):
         # targets_tensor = torch.FloatTensor(targets).to(self.configs.device)
         # mask_tensor = torch.FloatTensor(mask).to(self.configs.device)
         self.optimizer.zero_grad()
-        next_frames, loss = self.network(forcings, init_cond, static_inputs, targets)
+
+        batch, timesteps, channels, height, width = forcings.shape
+
+        next_frames = []
+        h_t = []
+        c_t = []
+        delta_c_list = []
+        delta_m_list = []
+        decouple_loss = []
+
+        for i in range(self.num_layers):
+            zeros = torch.zeros([batch, self.num_hidden[i], height, width]).cuda()
+            h_t.append(zeros)
+            c_t.append(zeros)
+            delta_c_list.append(zeros)
+            delta_m_list.append(zeros)
+
+        memory = self.network.memory_encoder(init_cond[:, 0])
+        c_t = list(torch.split(self.network.cell_encoder(static_inputs[:, 0]), self.num_hidden, dim=1))
+
+        net = init_cond[:, 0]
+        net_temp = []
+
+        for t in range(timesteps):
+            net, net_temp, d_loss_step, h_t, c_t, memory, delta_c_list, delta_m_list \
+                  = self.network(forcings, init_cond, static_inputs, targets, net, net_temp,
+                                 h_t, c_t, memory, delta_c_list, delta_m_list, t)
+            next_frames.append(net)
+            # decouple_loss.append(torch.mean(torch.stack(d_loss_step)))
+            decouple_loss += d_loss_step
+        decouple_loss = torch.mean(torch.stack(decouple_loss, dim=0))
+        next_frames = torch.stack(next_frames, dim=1)
+        loss = self.network.MSE_criterion(next_frames, targets) + self.configs.decouple_beta * decouple_loss
+
         loss.backward()
         self.optimizer.step()
         # self.scheduler.step()
-        return loss.detach().cpu().numpy()
+        # return loss.detach().cpu().numpy()
+        return loss.item()
 
     def test(self, forcings, init_cond, static_inputs, targets):
         # frames_tensor = torch.FloatTensor(frames).to(self.configs.device)
         # mask_tensor = torch.FloatTensor(mask).to(self.configs.device)
         with torch.no_grad():
-            next_frames, _ = self.network(forcings, init_cond, static_inputs, targets)
+            batch, timesteps, channels, height, width = forcings.shape
+
+            next_frames = []
+            h_t = []
+            c_t = []
+            delta_c_list = []
+            delta_m_list = []
+            # decouple_loss = []
+
+            for i in range(self.num_layers):
+                zeros = torch.zeros([batch, self.num_hidden[i], height, width]).cuda()
+                h_t.append(zeros)
+                c_t.append(zeros)
+                delta_c_list.append(zeros)
+                delta_m_list.append(zeros)
+
+            memory = self.network.memory_encoder(init_cond[:, 0])
+            c_t = list(torch.split(self.network.cell_encoder(static_inputs[:, 0]), self.num_hidden, dim=1))
+
+            net = init_cond[:, 0]
+            net_temp = []
+
+            # lib = ctypes.CDLL('./libclm_lsm.so')
+            lib_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'libclm_lsm.so'))
+            lib = ctypes.CDLL(lib_path)
+            print("CLM shared library loaded successfully.")
+
+            for t in range(timesteps):
+
+                net, net_temp, _, h_t, c_t, memory, delta_c_list, delta_m_list \
+                    = self.network(forcings, init_cond, static_inputs, targets, net, net_temp,
+                                    h_t, c_t, memory, delta_c_list, delta_m_list, t)
+                next_frames.append(net)
+                # decouple_loss.append(d_loss_step)
+            # decouple_loss = torch.mean(torch.stack(decouple_loss, dim=0))
+            next_frames = torch.stack(next_frames, dim=1)
+            # loss = self.network.MSE_criterion(next_frames, targets) + self.configs.beta * decouple_loss
+
+            # next_frames, _ = self.network(forcings, init_cond, static_inputs, targets)
         # return next_frames.detach().cpu().numpy()
         return next_frames
