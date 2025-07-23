@@ -65,7 +65,6 @@ class Model(object):
             c_t.append(zeros)
             delta_c_list.append(zeros)
             delta_m_list.append(zeros)
-
         memory = self.network.memory_encoder(init_cond[:, 0])
         c_t = list(torch.split(self.network.cell_encoder(static_inputs[:, 0]), self.num_hidden, dim=1))
 
@@ -74,8 +73,8 @@ class Model(object):
 
         for t in range(timesteps):
             net, net_temp, d_loss_step, h_t, c_t, memory, delta_c_list, delta_m_list \
-                  = self.network(forcings, init_cond, static_inputs, targets, net, net_temp,
-                                 h_t, c_t, memory, delta_c_list, delta_m_list, t)
+                  = self.network(forcings[:, t], init_cond, static_inputs, targets, net, net_temp,
+                                 h_t, c_t, memory, delta_c_list, delta_m_list)
             next_frames.append(net)
             # decouple_loss.append(torch.mean(torch.stack(d_loss_step)))
             decouple_loss += d_loss_step
@@ -123,8 +122,8 @@ class Model(object):
             for t in range(timesteps):
 
                 net, net_temp, _, h_t, c_t, memory, delta_c_list, delta_m_list \
-                    = self.network(forcings, init_cond, static_inputs, targets, net, net_temp,
-                                    h_t, c_t, memory, delta_c_list, delta_m_list, t)
+                    = self.network(forcings[:, t], init_cond, static_inputs, targets, net, net_temp,
+                                    h_t, c_t, memory, delta_c_list, delta_m_list)
                 next_frames.append(net)
                 # decouple_loss.append(d_loss_step)
             # decouple_loss = torch.mean(torch.stack(decouple_loss, dim=0))

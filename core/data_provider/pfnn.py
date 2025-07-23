@@ -184,7 +184,7 @@ class DataProcess:
         if mode == 'train':
             init_cond_name = self.init_cond_path
         else:
-            init_cond_name = '/home/aurelia/parflow-nn/standard_2018/output_press/a1_run_5.out.press.01000.pfb'
+            init_cond_name = '/home/aurelia/parflow-nn/standard_2018/output_press/a1_run_5.out.press.04000.pfb'
 
         frame_np = read_pfb(get_absolute_path(init_cond_name)).astype(np.float32)
         frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]

@@ -46,9 +46,10 @@ class RNN(nn.Module):
         self.scale = nn.Parameter(torch.zeros(1))
 
     def forward(self, forcings, init_cond, static_inputs, targets, net, net_temp,
-                h_t, c_t, memory, delta_c_list, delta_m_list, t):
+                h_t, c_t, memory, delta_c_list, delta_m_list):
 
-        batch, timesteps, channels, height, width = forcings.shape
+        # batch, timesteps, channels, height, width = forcings.shape
+        batch, channels, height, width = forcings.shape
 
         # next_frames = []
         # h_t = []
@@ -70,7 +71,8 @@ class RNN(nn.Module):
         # net = init_cond[:, 0]
         # net_temp = []
         # for t in range(timesteps):
-        action = forcings[:, t]
+        # action = forcings[:, t]
+        action = forcings
 
         h_t[0], c_t[0], memory, delta_c, delta_m = self.cell_list[0](net, action, h_t[0], c_t[0], memory)
         delta_c_list[0] = F.normalize(self.adapter(delta_c).view(delta_c.shape[0], delta_c.shape[1], -1), dim=2)
