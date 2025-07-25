@@ -1,0 +1,94 @@
+
+# 依赖分析后自动排序的 Makefile：不会再缺 .mod 文件
+FC = gfortran
+FFLAGS = -O2 -fPIC -cpp -Jinclude -Iinclude
+OBJS = \
+./share/MOD_Precision.o \
+./share/MOD_SPMD_Task.o \
+./share/MOD_Namelist.o \
+./main/MOD_Vars_Global.o \
+./main/MOD_Vars_TimeInvariants.o \
+./coupling/drv_gridmodule.o \
+./preprocess/rd_soil_properties.o \
+./preprocess/rawdata_soil_solids_fractions.o \
+./preprocess/rawdata_soil_thermal_parameters.o \
+./main/MOD_Const_LC.o \
+./share/MOD_UserDefFun.o \
+./share/MOD_TimeManager.o \
+./mkinidata/MOD_LakeDepthReadin.o \
+./main/MOD_LAIEmpirical.o \
+./main/MOD_OrbCoszen.o \
+./main/MOD_Vars_TimeVariables.o \
+./main/MOD_Const_PFT.o \
+./mkinidata/MOD_HtopReadin.o \
+./main/MOD_Const_Physical.o \
+./share/MOD_Utils.o \
+./main/MOD_3DCanopyRadiation.o \
+./main/MOD_Aerosol.o \
+./main/MOD_SnowSnicar.o \
+./main/MOD_Albedo.o \
+./main/HYDRO/MOD_Hydro_SoilFunction.o \
+./mkinidata/MOD_IniTimeVariable.o \
+./mkinidata/MOD_SoilColorRefl.o \
+./mkinidata/MOD_Initialize.o \
+./mkinidata/CoLMINI.o \
+./main/MOD_MonthlyinSituCO2MaunaLoa.o \
+./main/MOD_Vars_1DForcing.o \
+./coupling/pf_getforce.o \
+./main/MOD_Vars_1DFluxes.o \
+./coupling/pf_readout.o \
+./coupling/drv_readvegtf.o \
+./coupling/pf_couple.o \
+./main/MOD_Eroot.o \
+./main/MOD_NdepData.o \
+./main/MOD_FrictionVelocity.o \
+./main/MOD_Qsadv.o \
+./main/MOD_SimpleOcean.o \
+./main/MOD_Irrigation.o \
+./main/MOD_LeafInterception.o \
+./main/MOD_AssimStomataConductance.o \
+./main/MOD_PhaseChange.o \
+./main/MOD_SoilThermalParameters.o \
+./main/MOD_GroundTemperature.o \
+./main/MOD_TurbulenceLEddy.o \
+./main/MOD_GroundFluxes.o \
+./main/MOD_PlantHydraulic.o \
+./main/MOD_Ozone.o \
+./main/MOD_CanopyLayerProfile.o \
+./main/MOD_LeafTemperature.o \
+./main/MOD_LeafTemperaturePC.o \
+./main/MOD_SoilSurfaceResistance.o \
+./main/MOD_Thermal.o \
+./main/MOD_OrbCosazi.o \
+./main/MOD_SnowLayersCombineDivide.o \
+./main/MOD_SoilSnowHydrology.o \
+./main/MOD_Glacier.o \
+./main/MOD_Lake.o \
+./main/MOD_NewSnow.o \
+./main/MOD_SnowFraction.o \
+./main/MOD_NetSolar.o \
+./main/MOD_WetBulb.o \
+./main/MOD_RainSnowTemp.o \
+./main/CoLMMAIN.o \
+./main/MOD_LightningData.o \
+./main/CoLMDRIVER.o \
+./main/MOD_FireData.o \
+./main/MOD_NitrifData.o \
+./main/CoLM.o \
+clm_lsm_c_interface_fixed.o 
+
+all: libclm_lsm.so
+
+libclm_lsm.so: $(OBJS)
+	$(FC) -shared -o $@ $(OBJS)
+
+%.o: %.F90
+	$(FC) $(FFLAGS) -c $< -o $@
+
+%.o: %.f90
+	$(FC) $(FFLAGS) -c $< -o $@
+
+clean:
+	find . -name '*.o' -delete
+	find . -name '*.mod' -delete
+	rm -f libclm_lsm.so

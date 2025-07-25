@@ -73,7 +73,7 @@ class Model(object):
 
         for t in range(timesteps):
             net, net_temp, d_loss_step, h_t, c_t, memory, delta_c_list, delta_m_list \
-                  = self.network(forcings[:, t], init_cond, static_inputs, targets, net, net_temp,
+                  = self.network(forcings[:, t], net, net_temp,
                                  h_t, c_t, memory, delta_c_list, delta_m_list)
             next_frames.append(net)
             # decouple_loss.append(torch.mean(torch.stack(d_loss_step)))
@@ -122,9 +122,65 @@ class Model(object):
             for t in range(timesteps):
 
                 net, net_temp, _, h_t, c_t, memory, delta_c_list, delta_m_list \
-                    = self.network(forcings[:, t], init_cond, static_inputs, targets, net, net_temp,
+                    = self.network(forcings[:, t], net, net_temp,
                                     h_t, c_t, memory, delta_c_list, delta_m_list)
                 next_frames.append(net)
+                # decouple_loss.append(d_loss_step)
+            # decouple_loss = torch.mean(torch.stack(decouple_loss, dim=0))
+            next_frames = torch.stack(next_frames, dim=1)
+            # loss = self.network.MSE_criterion(next_frames, targets) + self.configs.beta * decouple_loss
+
+            # next_frames, _ = self.network(forcings, init_cond, static_inputs, targets)
+        # return next_frames.detach().cpu().numpy()
+        return next_frames
+
+    def test_lsm(self):
+
+        with torch.no_grad():
+
+            #get init and static, reshape
+            #batch, timesteps, channels, height, width = forcings.shape
+            #change forcings to static to get the shape?
+
+            next_frames = []
+            h_t = []
+            c_t = []
+            delta_c_list = []
+            delta_m_list = []
+            # decouple_loss = []
+
+            for i in range(self.num_layers):
+                zeros = torch.zeros([batch, self.num_hidden[i], height, width]).cuda()
+                h_t.append(zeros)
+                c_t.append(zeros)
+                delta_c_list.append(zeros)
+                delta_m_list.append(zeros)
+
+            memory = self.network.memory_encoder(init_cond[:, 0])
+            c_t = list(torch.split(self.network.cell_encoder(static_inputs[:, 0]), self.num_hidden, dim=1))
+
+            net = init_cond[:, 0]
+            net_temp = []
+
+            # lib = ctypes.CDLL('./libclm_lsm.so')
+            lib_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'libclm_lsm.so'))
+            lib = ctypes.CDLL(lib_path)
+            print("CLM shared library loaded successfully.")
+
+            for t in range(timesteps):
+
+                #read 8 forcings
+                #cal saturation
+                #call lsm
+
+                #reshape evaptrans to get the forcing to network
+
+                net, net_temp, _, h_t, c_t, memory, delta_c_list, delta_m_list \
+                    = self.network(forcings, net, net_temp, h_t, c_t, memory, delta_c_list, delta_m_list)
+                next_frames.append(net)
+
+                #reshape back net to get the init_cond for next step
+
                 # decouple_loss.append(d_loss_step)
             # decouple_loss = torch.mean(torch.stack(decouple_loss, dim=0))
             next_frames = torch.stack(next_frames, dim=1)

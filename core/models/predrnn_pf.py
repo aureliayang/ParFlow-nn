@@ -45,8 +45,7 @@ class RNN(nn.Module):
                                                batch_first=True, dropout=0.1)
         self.scale = nn.Parameter(torch.zeros(1))
 
-    def forward(self, forcings, init_cond, static_inputs, targets, net, net_temp,
-                h_t, c_t, memory, delta_c_list, delta_m_list):
+    def forward(self, forcings, net, net_temp, h_t, c_t, memory, delta_c_list, delta_m_list):
 
         # batch, timesteps, channels, height, width = forcings.shape
         batch, channels, height, width = forcings.shape
