@@ -149,10 +149,12 @@ class Model(object):
                                               self.patch_size), dtype=torch.float)  # np.float32
             init_cond = torch.empty((num_patch, 1, self.init_cond_channel, self.patch_size, 
                                      self.patch_size), dtype=torch.float)  # np.float32
+            forcings_temp = torch.empty((num_patch, 1, self.act_channel, self.patch_size, self.patch_size),
+                                         dtype=torch.float)  # np.float32
             # static
             static_inputs_name = os.path.join(self.configs.static_inputs_path, self.configs.static_inputs_filename) 
             frame_np = read_pfb(get_absolute_path(static_inputs_name)).astype(np.float32)
-            frame_np = frame_np[:, 0:num_patch_y*self.configs.patch_size, 0:num_patch_x*self.configs.patch_size] # drop off
+            frame_np = frame_np[:, 0:length_y, 0:length_x] # drop off
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
             mean = frame_im.mean(dim=(3,4), keepdim=True)
             std = frame_im.std(dim=(3,4), keepdim=True)
@@ -162,24 +164,24 @@ class Model(object):
 
             target_norm_path = os.path.join(self.configs.targets_path,self.configs.target_norm_file)
             frame_np = read_pfb(get_absolute_path(target_norm_path)).astype(np.float32)
-            frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
+            frame_np = frame_np[:, 0:length_y, 0:length_x]
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
             mean_p = frame_im.mean(dim=(3,4), keepdim=True)
             std_p = frame_im.std(dim=(3,4), keepdim=True)
 
             force_norm_path = os.path.join(self.configs.forcings_path,self.configs.force_norm_file)
             frame_np = read_pfb(get_absolute_path(force_norm_path)).astype(np.float32)
-            frame_np = frame_np[6:10, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
+            frame_np = frame_np[6:10, 0:length_y, 0:length_x]
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
             mean_a = frame_im.mean(dim=(3,4), keepdim=True)
             std_a = frame_im.std(dim=(3,4), keepdim=True)
             
             init_cond_name = self.configs.init_cond_path
             frame_np = read_pfb(get_absolute_path(init_cond_name)).astype(np.float32)
-            frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
+            frame_np = frame_np[:, 0:length_y, 0:length_x]
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
             frame_im = (frame_im-mean_p)/std_p
-            init_cond[0:num_patch_x * num_patch_y,:,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
+            init_cond[0:num_patch,:,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
 
             batch, _, channels, height, width = static_inputs.shape
             #change forcings to static to get the shape?
@@ -284,9 +286,6 @@ class Model(object):
             porosity = read_pfb(porosity_filename)[:,:length_y,:length_x]
             pf_dz_mult = read_pfb(pf_dz_mult_filename)[:,:length_y,:length_x]
 
-            press = np.pad(press, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0)
-            press = press.flatten()
-
             topo = np.pad(topo, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0)
             topo = topo.flatten()
 
@@ -300,7 +299,7 @@ class Model(object):
             for t in range(self.configs.timesteps):
 
                 #read 8 forcings, cal saturation
-                hour = t%24 - 1
+                hour = t % 24 - 1 if t % 24 != 0 else 23
                 time1 = str(t // 24 * 24 + 1).zfill(6)
                 time2 = str(t // 24 * 24 + 24).zfill(6)
 
@@ -339,6 +338,9 @@ class Model(object):
 
                 #cal saturation
                 satur = self._vg_saturation(press, alpha, n_value, theta_r, theta_s)
+
+                press = np.pad(press, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0)
+                press = press.flatten()
 
                 satur = np.pad(satur, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0)
                 satur = satur.flatten()
@@ -417,8 +419,13 @@ class Model(object):
                     1, 0, 1, 1,                              # clm_next, clm_write_logs, clm_last_rst, clm_daily_rst
                     10, 10                                   # pf_nlevsoi, pf_nlevlak
                 )
-
                 #reshape evaptrans to get the forcing to network
+                evap_trans = np.reshape(temp_arr_3d,(nz+2,length_y+2,length_x+2)).astype(np.float32)
+                evap_trans = torch.from_numpy(evap_trans[2:nz+2,1:length_y+2,1:length_x+2]).unsqueeze(0).unsqueeze(0)
+                evap_trans = (evap_trans-mean_a)/std_a
+                forcings_temp[:,:,:,:,:] = preprocess.reshape_patch(evap_trans, self.configs.patch_size)
+                forcings = forcings_temp.to(self.configs.device)
+                #reshape and normalize
 
                 net, net_temp, _, h_t, c_t, memory, delta_c_list, delta_m_list \
                     = self.network(forcings, net, net_temp, h_t, c_t, memory, delta_c_list, delta_m_list)
