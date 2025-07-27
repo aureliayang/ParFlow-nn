@@ -93,7 +93,7 @@ class Model(object):
         # return loss.detach().cpu().numpy()
         return loss.item()
 
-    def test(self, forcings, init_cond, static_inputs, targets):
+    def test(self, forcings, init_cond, static_inputs):
         # frames_tensor = torch.FloatTensor(frames).to(self.configs.device)
         # mask_tensor = torch.FloatTensor(mask).to(self.configs.device)
         with torch.no_grad():
@@ -145,7 +145,7 @@ class Model(object):
             length_y = num_patch_y*self.configs.patch_size
             num_patch = num_patch_x*num_patch_y
 
-            static_inputs_temp = torch.empty((num_patch, 1, self.configs.static_channel, self.configs.patch_size, 
+            static_inputs = torch.empty((num_patch, 1, self.configs.static_channel, self.configs.patch_size,
                                               self.configs.patch_size), dtype=torch.float)  # np.float32
             init_cond = torch.empty((num_patch, 1, self.configs.init_cond_channel, self.configs.patch_size, 
                                      self.configs.patch_size), dtype=torch.float)  # np.float32
@@ -155,38 +155,39 @@ class Model(object):
             static_inputs_name = os.path.join(self.configs.static_inputs_path, 
                                               self.configs.static_inputs_filename) 
             frame_np = read_pfb(get_absolute_path(static_inputs_name)).astype(np.float32)
-            frame_np = frame_np[:, 0:length_y, 0:length_x] # drop off
+            frame_np = frame_np[:, :length_y, :length_x] # drop off
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
             mean = frame_im.mean(dim=(3,4), keepdim=True)
             std = frame_im.std(dim=(3,4), keepdim=True)
             frame_im = (frame_im-mean)/std
-            static_inputs_temp[:,:,:,:,:] = preprocess.reshape_patch(frame_im, self.configs.patch_size)
-            static_inputs = static_inputs_temp.to(self.configs.device)
+            static_inputs[:,:,:,:,:] = preprocess.reshape_patch(frame_im, self.configs.patch_size)
+            static_inputs = static_inputs.to(self.configs.device)
 
             target_norm_path = os.path.join(self.configs.targets_path,self.configs.target_norm_file)
             frame_np = read_pfb(get_absolute_path(target_norm_path)).astype(np.float32)
-            frame_np = frame_np[:, 0:length_y, 0:length_x]
+            frame_np = frame_np[:, :length_y, :length_x]
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
             mean_p = frame_im.mean(dim=(3,4), keepdim=True)
             std_p = frame_im.std(dim=(3,4), keepdim=True)
 
             force_norm_path = os.path.join(self.configs.forcings_path,self.configs.force_norm_file)
             frame_np = read_pfb(get_absolute_path(force_norm_path)).astype(np.float32)
-            frame_np = frame_np[1:10, 0:length_y, 0:length_x]  #10 layers
+            frame_np = frame_np[1:10, :length_y, :length_x]  #10 layers
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
             mean_a = frame_im.mean(dim=(3,4), keepdim=True)
             std_a = frame_im.std(dim=(3,4), keepdim=True)
             
-            init_cond_name = self.configs.init_cond_path ###
+            init_cond_name = os.path.join(self.configs.init_cond_test_path,
+                                          self.configs.init_cond_test_filename)
             frame_np = read_pfb(get_absolute_path(init_cond_name)).astype(np.float32)
-            frame_np = frame_np[:, 0:length_y, 0:length_x]
+            frame_np = frame_np[:, :length_y, :length_x]
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
             frame_im = (frame_im-mean_p)/std_p
             init_cond[:,:,:,:,:] = preprocess.reshape_patch(frame_im, self.configs.patch_size)
             init_cond = init_cond.to(self.configs.device)
 
-            batch, _, channels, height, width = static_inputs.shape
             #change forcings to static to get the shape?
+            batch, _, channels, height, width = static_inputs.shape
 
             next_frames = []
             h_t = []
@@ -215,31 +216,33 @@ class Model(object):
 
             # 构造虚拟参数（用实际数据替换）
             nz, clm_nz = 11, 10
+            nx, ny = self.configs.img_width, self.configs.img_height
 
-            size_2d  = (self.configs.img_width+2) * (self.configs.img_height+2) * 3
-            size_3d  = (self.configs.img_width+2) * (self.configs.img_height+2) * (nz+2)
-            size_clm = (self.configs.img_width+2) * (self.configs.img_height+2) * (clm_nz+2)
+            size_2d  = (nx+2) * (ny+2) * 3
+            size_3d  = (nx+2) * (ny+2) * (nz+2)
+            size_clm = (nx+2) * (ny+2) * (clm_nz+2)
 
             temp_arr_2d = np.ones(size_2d, dtype=np.float64)
             temp_arr_3d = np.ones(size_3d, dtype=np.float64)
             temp_arr_clm = np.ones(size_clm, dtype=np.float64)
 
-            alpha_filename = '../unname/pfb_shallow_2nd/unname_test.out.alpha.pfb'
-            n_filename = '../unname/pfb_shallow_2nd/unname_test.out.n.pfb'
-            theta_s_filename = '../unname/pfb_shallow_2nd/unname_test.out.ssat.pfb'
-            theta_r_filename = '../unname/pfb_shallow_2nd/unname_test.out.sres.pfb'
+            targets_filename = self.configs.pf_runname + ".out."
+            targets_path = os.path.join(self.configs.targets_path, targets_filename)
+            alpha_filename = targets_path+'alpha.pfb'
+            n_filename = targets_path+'n.pfb'
+            theta_s_filename = targets_path+'ssat.pfb'
+            theta_r_filename = targets_path+'sres.pfb'
 
-            press_filename = '../unname/pfb_shallow_2nd/unname_test.out.press.00000.pfb' ###
-            mask_filename = '../unname/pfb_shallow_2nd/unname_test.out.mask.pfb'
-            porosity_filename = '../unname/pfb_shallow_2nd/unname_test.out.porosity.pfb'
-            pf_dz_mult_filename = './a2_deep_y2.out.dz_mult.pfb'
+            mask_filename = targets_path+'mask.pfb'
+            porosity_filename = targets_path+'porosity.pfb'
+            pf_dz_mult_filename = targets_path+'dz_mult.pfb'
 
             alpha = read_pfb(alpha_filename)
             n_value = read_pfb(n_filename)
             theta_s = read_pfb(theta_s_filename)
             theta_r = read_pfb(theta_r_filename)
 
-            press = read_pfb(press_filename)
+            press_temp = read_pfb(init_cond_name)
             topo = read_pfb(mask_filename)
             topo[:,length_y:,length_x:] = -9999.
             porosity = read_pfb(porosity_filename)
@@ -247,63 +250,58 @@ class Model(object):
 
             topo = np.pad(topo, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0)
             topo = topo.flatten()
-
             porosity = np.pad(porosity, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0)
             porosity = porosity.flatten()
-
             pf_dz_mult = np.pad(pf_dz_mult, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0)
             pf_dz_mult = pf_dz_mult.flatten()
 
+            for t in range(self.configs.test_start_step, self.configs.test_end_step + 1):
 
-            for t in range(self.configs.test_timesteps):
-
-                #read 8 forcings, cal saturation
+                # read 8 forcings, cal saturation
                 hour = t % 24
                 time1 = str(t // 24 * 24 + 1).zfill(6) 
                 time2 = str(t // 24 * 24 + 24).zfill(6) 
 
-                sw_pf_filename = '../E5L/E5L.DSWR.' + time1 + '_to_' + time2 + '.pfb'
-                lw_pf_filename = '../E5L/E5L.DLWR.' + time1 + '_to_' + time2 + '.pfb'
-                prcp_pf_filename = '../E5L/E5L.APCP.' + time1 + '_to_' + time2 + '.pfb'
-                tas_pf_filename = '../E5L/E5L.Temp.' + time1 + '_to_' + time2 + '.pfb'
-                u_pf_filename = '../E5L/E5L.UGRD.' + time1 + '_to_' + time2 + '.pfb'
-                v_pf_filename = '../E5L/E5L.VGRD.' + time1 + '_to_' + time2 + '.pfb'
-                patm_pf_filename = '../E5L/E5L.Press.' + time1 + '_to_' + time2 + '.pfb'
-                qatm_pf_filename = '../E5L/E5L.SPFH.' + time1 + '_to_' + time2 + '.pfb'
+                general_path = os.path.join(self.configs.lsm_forcings_path,self.configs.lsm_forcings_name)
+                sw_pf_filename = general_path +'.DSWR.' + time1 + '_to_' + time2 + '.pfb'
+                lw_pf_filename = general_path +'.DLWR.' + time1 + '_to_' + time2 + '.pfb'
+                prcp_pf_filename = general_path +'.APCP.' + time1 + '_to_' + time2 + '.pfb'
+                tas_pf_filename = general_path +'.Temp.' + time1 + '_to_' + time2 + '.pfb'
+                u_pf_filename = general_path +'.UGRD.' + time1 + '_to_' + time2 + '.pfb'
+                v_pf_filename = general_path +'.VGRD.' + time1 + '_to_' + time2 + '.pfb'
+                patm_pf_filename = general_path +'.Press.' + time1 + '_to_' + time2 + '.pfb'
+                qatm_pf_filename = general_path +'.SPFH.' + time1 + '_to_' + time2 + '.pfb'
 
-                # 文件名变量与目标变量名的对应关系
+                # read forcings and pad dim
                 pf_vars = {'sw_pf': sw_pf_filename, 'lw_pf': lw_pf_filename,
                            'prcp_pf': prcp_pf_filename, 'tas_pf': tas_pf_filename,
                            'u_pf': u_pf_filename, 'v_pf': v_pf_filename,
                            'patm_pf': patm_pf_filename, 'qatm_pf': qatm_pf_filename}
-
-                # 创建变量字典
                 variables = {}
-
                 for var_name, filename in pf_vars.items():
                     data = read_pfb(get_absolute_path(filename))[hour, :, :]
                     data = np.expand_dims(data, axis=0)
                     variables[var_name] = data
-
                 sw_pf, lw_pf, prcp_pf, tas_pf = variables['sw_pf'], variables['lw_pf'], variables['prcp_pf'], variables['tas_pf']
                 u_pf, v_pf, patm_pf, qatm_pf = variables['u_pf'], variables['v_pf'], variables['patm_pf'], variables['qatm_pf']
 
-                #cal saturation
-                satur = self._vg_saturation(press, alpha, n_value, theta_r, theta_s)
+                # cal saturation
+                satur = self._vg_saturation(press_temp, alpha, n_value, theta_r, theta_s)
+                press = np.pad(press_temp, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0)
+                press = press.flatten()
 
-                variables = {'press': press, 'satur': satur, 'sw_pf': sw_pf, 'lw_pf': lw_pf, 'prcp_pf': prcp_pf,
+                # pad ghost cells and flatten
+                variables = {'satur': satur, 'sw_pf': sw_pf, 'lw_pf': lw_pf, 'prcp_pf': prcp_pf,
                              'tas_pf': tas_pf, 'u_pf': u_pf, 'v_pf': v_pf, 'patm_pf': patm_pf, 'qatm_pf': qatm_pf}
-
                 for name, arr in variables.items():
                     arr = np.pad(arr, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0)
                     arr = arr.flatten()
-                    variables[name] = arr  # 更新字典中的值
-
-                press, satur = variables['press'], variables['satur']
+                    variables[name] = arr
+                satur = variables['satur']
                 sw_pf, lw_pf, prcp_pf, tas_pf = variables['sw_pf'], variables['lw_pf'], variables['prcp_pf'], variables['tas_pf']
                 u_pf, v_pf, patm_pf, qatm_pf = variables['u_pf'], variables['v_pf'], variables['patm_pf'], variables['qatm_pf']
                 
-                #call lsm
+                # call lsm
                 lib.clm_lsm_c(
                     press.ctypes.data_as(POINTER(c_double)),        # pressure
                     satur.ctypes.data_as(POINTER(c_double)),        # saturation
@@ -311,15 +309,15 @@ class Model(object):
                     topo.ctypes.data_as(POINTER(c_double)),         # topo
                     porosity.ctypes.data_as(POINTER(c_double)),     # porosity
                     pf_dz_mult.ctypes.data_as(POINTER(c_double)),   # pf_dz_mult
-                    1,                        # istep_pf
-                    1.0,                      # dt
-                    0.,                       # time 
-                    0.,                       # start_time_pf
+                    t,                                  # istep_pf
+                    1.0,                                # dt
+                    t - 1.,                             # time ？？？
+                    self.configs.test_start_step - 1.,  # start_time_pf
                     961.72,                   # pdx
                     961.72,                   # pdy
                     200.,                     # pdz
-                    0, 0, length_x, length_y, nz, length_x+2, length_y+2, nz+2, 0,         # ix, iy, nx, ny, nz, nx_f, ny_f, nz_f, nz_rz
-                    0, 0, 0, 0, length_x, length_y, 0,                         # ip,npp,npq,npr,gnx,gny,rank
+                    0, 0, nx, ny, nz, nx+2, ny+2, nz+2, 0,         # ix, iy, nx, ny, nz, nx_f, ny_f, nz_f, nz_rz
+                    0, 0, 0, 0, nx, ny, 0,                         # ip,npp,npq,npr,gnx,gny,rank
                     sw_pf.ctypes.data_as(POINTER(c_double)),
                     lw_pf.ctypes.data_as(POINTER(c_double)),
                     prcp_pf.ctypes.data_as(POINTER(c_double)),
@@ -352,10 +350,9 @@ class Model(object):
                     10, 10                                   # pf_nlevsoi, pf_nlevlak
                 )
                 #reshape evaptrans to get the forcing to network
-                evap_trans = np.reshape(temp_arr_3d,(nz+2,self.configs.img_height+2,
-                                                     self.configs.img_width+2)).astype(np.float32)
-                evap_trans = torch.from_numpy(evap_trans[2:nz+2,1:length_y,
-                                                         1:length_x]).unsqueeze(0).unsqueeze(0)
+                evap_trans = np.reshape(temp_arr_3d,(nz+2,ny+2,nx+2)).astype(np.float32)
+                evap_trans = torch.from_numpy(evap_trans[2:nz+2,1:length_y+1,
+                                                         1:length_x+1]).unsqueeze(0).unsqueeze(0)
                 evap_trans = (evap_trans-mean_a)/std_a
                 forcings_temp[:,:,:,:,:] = preprocess.reshape_patch(evap_trans, self.configs.patch_size)
                 forcings = forcings_temp.to(self.configs.device)
@@ -368,11 +365,11 @@ class Model(object):
                 press_ = preprocess.reshape_patch_back(net, num_patch_x, num_patch_y)
                 press_ = torch.squeeze((press_.detach().cpu())*std_p+mean_p).numpy().astype(np.float64)
                 # padding
-                press[:,:length_y,:length_x] = press_
+                press_temp[:,:length_y,:length_x] = press_
 
             next_frames = torch.stack(next_frames, dim=1)
         # return next_frames.detach().cpu().numpy()
-        return next_frames
+        return next_frames, mean_p, std_p
     
     def _vg_saturation(self, h, alpha, n, theta_r, theta_s):
         m = 1 - 1 / n

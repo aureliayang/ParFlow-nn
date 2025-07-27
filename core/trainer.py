@@ -33,7 +33,7 @@ def test(model, test_input_handle, configs, itr):
     while (test_input_handle.no_batch_left() == False):
         batch_id = batch_id + 1
         forcings, init_cond, static_inputs, targets = test_input_handle.get_batch()
-        img_gen = model.test(forcings, init_cond, static_inputs, targets)
+        img_gen = model.test(forcings, init_cond, static_inputs)
  
         # save prediction examples
         path = os.path.join(res_path, str(batch_id))
@@ -68,4 +68,21 @@ def test(model, test_input_handle, configs, itr):
             file_name = os.path.join(path, file_name)
             write_pfb(file_name, img_tar[i,:,:,:], dist=False)
         test_input_handle.next()
+
+def test_lsm(model, configs, itr):
+    ###return and save files
+    num_patch_y = configs.img_height // configs.patch_size
+    num_patch_x = configs.img_width // configs.patch_size
+
+    img_gen, mean_p, std_p = model.test_lsm()
+    img_gen = preprocess.reshape_patch_back(img_gen, num_patch_x, num_patch_y)
+    img_gen = torch.squeeze((img_gen.detach().cpu())*std_p+mean_p).numpy().astype(np.float64)
+
+    path = os.path.join(configs.gen_frm_dir, str(itr))
+    os.mkdir(path)
+
+    for i in range(configs.test_start_step, configs.test_end_step + 1):
+        file_name = 'nn_gen.press.' + str(i).zfill(5) + '.pfb'
+        file_name = os.path.join(path, file_name)
+        write_pfb(file_name, img_gen[i,:,:,:], dist=False)
 

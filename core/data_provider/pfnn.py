@@ -94,6 +94,8 @@ class DataProcess:
         # the root path and the full file name
         self.init_cond_path = os.path.join(configs.init_cond_path, 
                                            configs.init_cond_filename)   
+        self.init_cond_test_path = os.path.join(configs.init_cond_test_path,
+                                           configs.init_cond_test_filename)
         
         # currently, please combine static parameters manually and provide it path
         self.static_inputs_path = os.path.join(configs.static_inputs_path, 
@@ -175,7 +177,7 @@ class DataProcess:
         std_p = frame_im.std(dim=(3,4), keepdim=True)
 
         frame_np = read_pfb(get_absolute_path(self.force_norm_path)).astype(np.float32)
-        frame_np = frame_np[6:10, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
+        frame_np = frame_np[1:11, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
         frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
         mean_a = frame_im.mean(dim=(3,4), keepdim=True)
         std_a = frame_im.std(dim=(3,4), keepdim=True)
@@ -184,7 +186,7 @@ class DataProcess:
         if mode == 'train':
             init_cond_name = self.init_cond_path
         else:
-            init_cond_name = '/home/aurelia/parflow-nn/standard_2018/output_press/a1_run_5.out.press.04000.pfb'
+            init_cond_name = self.init_cond_test_path
 
         frame_np = read_pfb(get_absolute_path(init_cond_name)).astype(np.float32)
         frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
@@ -199,7 +201,7 @@ class DataProcess:
             
             forcings_name = self.forcings_path + str(i+start_step).zfill(5) + ".pfb"
             frame_np = read_pfb(get_absolute_path(forcings_name)).astype(np.float32)
-            frame_np = frame_np[6:10, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
+            frame_np = frame_np[1:11, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
             frame_im = (frame_im-mean_a)/std_a
             forcings_temp[:,i:i+1,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)

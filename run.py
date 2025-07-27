@@ -15,6 +15,7 @@ parser = argparse.ArgumentParser(description='CONCN surrogate model - ParFlow-nn
 
 # training/test
 parser.add_argument('--is_training', type=int, default=1)
+parser.add_argument('--is_test_lsm', type=int, default=0)
 parser.add_argument('--device', type=str, default='cpu:0')
 
 # data
@@ -45,6 +46,11 @@ parser.add_argument('--targets_path', type=str, default='')
 parser.add_argument('--target_norm_file', type=str, default='')
 parser.add_argument('--force_norm_file', type=str, default='')
 
+parser.add_argument('--init_cond_test_path', type=str, default='')
+parser.add_argument('--init_cond_test_filename', type=str, default='')
+parser.add_argument('--lsm_forcings_path', type=str, default='')
+parser.add_argument('--lsm_forcings_name', type=str, default='')
+
 #channel
 parser.add_argument('--init_cond_channel', type=int, default=10)
 parser.add_argument('--static_channel', type=int, default=15)
@@ -55,9 +61,10 @@ parser.add_argument('--img_channel', type=int, default=10)
 parser.add_argument('--num_hidden', type=str, default='16,16')
 parser.add_argument('--filter_size', type=int, default=5)
 parser.add_argument('--stride', type=int, default=1)
-parser.add_argument('--input_length', type=int, default=10)
 parser.add_argument('--patch_size', type=int, default=16)
 parser.add_argument('--decouple_beta', type=float, default=0.1)
+parser.add_argument('--input_length', type=int, default=10)
+# parser.add_argument('--lsm_timesteps', type=int, default=10)
 
 # optimization
 parser.add_argument('--lr', type=float, default=0.001)
@@ -103,6 +110,11 @@ def test_wrapper(model):
     test_input_handle = datasets_factory.data_provider(args)
     trainer.test(model, test_input_handle, args, 'test_result')
 
+def test_lsm_wrapper(model):
+    model.load(args.pretrained_model)
+    # test_input_handle = datasets_factory.data_provider(args)
+    trainer.test_lsm(model, args, 'test_result')
+
 if os.path.exists(args.save_dir):
     shutil.rmtree(args.save_dir)
 os.makedirs(args.save_dir)
@@ -115,7 +127,10 @@ print('Initializing models')
 
 model = Model(args)
 
-if args.is_training:
+if args.is_test_lsm:
+    args.is_training = 0
+    test_lsm_wrapper(model)
+elif args.is_training:
     train_wrapper(model)
 else:
     test_wrapper(model)
