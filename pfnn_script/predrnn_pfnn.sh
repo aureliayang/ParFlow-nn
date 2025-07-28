@@ -2,9 +2,10 @@ export CUDA_VISIBLE_DEVICES=0
 cd ..
 python -u run.py \
     --is_training 1 \
+    --is_test_lsm 1 \
     --device cuda \
     --dataset_name pfnn \
-    --pf_runname a1_baseline_y2 \
+    --pf_runname unname_test \
     --model_name predrnn_pf \
     --save_dir checkpoints/pfnn_predrnn \
     --gen_frm_dir results/pfnn_predrnn \
@@ -14,25 +15,29 @@ python -u run.py \
     --test_end_step 4200 \
     --img_height 146 \
     --img_width 252 \
-    --init_cond_path /home/aurelia/parflow-nn/standard_2018/output_press \
-    --init_cond_filename a1_baseline_y2.out.press.00200.pfb \
-    --static_inputs_path /home/aurelia/parflow-nn/standard_2018/subsurface_data \
+    --init_cond_path /home/cy15/unname/pfb_shallow_2nd \
+    --init_cond_filename unname_test.out.press.00200.pfb \
+    --init_cond_test_path /home/cy15/unname/pfb_shallow_2nd \
+    --init_cond_test_filename unname_test.out.press.04000.pfb \
+    --static_inputs_path /home/cy15/clm_call \
     --static_inputs_filename static_inputs_combined.pfb \
-    --forcings_path /home/aurelia/parflow-nn/standard_2018/output_evapotrans \
-    --targets_path /home/aurelia/parflow-nn/standard_2018/output_press \
-    --force_norm_file a1_baseline_y2.out.evaptrans.00200.pfb \
-    --target_norm_file a1_baseline_y2.out.press.00200.pfb \
-    --init_cond_channel 10 \
-    --static_channel 16 \
-    --act_channel 4 \
-    --img_channel 10 \
-    --input_length 10 \
+    --forcings_path /home/cy15/unname/pfb_shallow_2nd \
+    --targets_path /home/cy15/unname/pfb_shallow_2nd \
+    --force_norm_file unname_test.out.evaptrans.00200.pfb \
+    --target_norm_file unname_test.out.press.00200.pfb \
+    --lsm_forcings_path /home/cy15/E5L \
+    --lsm_forcings_name E5L \
+    --init_cond_channel 11 \
+    --static_channel 40 \
+    --act_channel 10 \
+    --img_channel 11 \
+    --input_length 20 \
     --patch_size 16 \
     --lr 0.0003 \
     --batch_size 16 \
-    --max_iterations 10000 \
+    --max_iterations 20000 \
     --display_interval 100 \
     --test_interval 1000 \
     --snapshot_interval 5000 \
-    # --pretrained_model /home/aurelia/parflow-nn/predrnn-pytorch-master/checkpoints_1/pfnn_predrnn/model.ckpt-10000
+    --pretrained_model /home/cy15/ParFlow-nn/checkpoints/pfnn_predrnn/model.ckpt-10000
     # --reverse_input 1 \

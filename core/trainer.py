@@ -84,5 +84,5 @@ def test_lsm(model, configs, itr):
     for i in range(configs.test_start_step, configs.test_end_step + 1):
         file_name = 'nn_gen.press.' + str(i).zfill(5) + '.pfb'
         file_name = os.path.join(path, file_name)
-        write_pfb(file_name, img_gen[i,:,:,:], dist=False)
+        write_pfb(file_name, img_gen[i-configs.test_start_step,:,:,:], dist=False)
 

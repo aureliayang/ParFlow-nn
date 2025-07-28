@@ -172,7 +172,7 @@ class Model(object):
 
             force_norm_path = os.path.join(self.configs.forcings_path,self.configs.force_norm_file)
             frame_np = read_pfb(get_absolute_path(force_norm_path)).astype(np.float32)
-            frame_np = frame_np[1:10, :length_y, :length_x]  #10 layers
+            frame_np = frame_np[1:11, :length_y, :length_x]  #10 layers
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
             mean_a = frame_im.mean(dim=(3,4), keepdim=True)
             std_a = frame_im.std(dim=(3,4), keepdim=True)
@@ -212,7 +212,7 @@ class Model(object):
             lib = ctypes.CDLL(lib_path)
             print("CLM shared library loaded successfully.")
 
-            self.set_clm_lsm_c_argtypes(lib)
+            self._set_clm_lsm_c_argtypes(lib)
 
             # 构造虚拟参数（用实际数据替换）
             nz, clm_nz = 11, 10
@@ -351,7 +351,7 @@ class Model(object):
                 )
                 #reshape evaptrans to get the forcing to network
                 evap_trans = np.reshape(temp_arr_3d,(nz+2,ny+2,nx+2)).astype(np.float32)
-                evap_trans = torch.from_numpy(evap_trans[2:nz+2,1:length_y+1,
+                evap_trans = torch.from_numpy(evap_trans[2:nz+1,1:length_y+1,
                                                          1:length_x+1]).unsqueeze(0).unsqueeze(0)
                 evap_trans = (evap_trans-mean_a)/std_a
                 forcings_temp[:,:,:,:,:] = preprocess.reshape_patch(evap_trans, self.configs.patch_size)
@@ -362,7 +362,7 @@ class Model(object):
                 next_frames.append(net)
 
                 #reshape back net to get the init_cond for next step
-                press_ = preprocess.reshape_patch_back(net, num_patch_x, num_patch_y)
+                press_ = preprocess.reshape_patch_back(net.unsqueeze(1), num_patch_x, num_patch_y)
                 press_ = torch.squeeze((press_.detach().cpu())*std_p+mean_p).numpy().astype(np.float64)
                 # padding
                 press_temp[:,:length_y,:length_x] = press_

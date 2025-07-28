@@ -57,7 +57,7 @@ parser.add_argument('--act_channel', type=int, default=4)
 parser.add_argument('--img_channel', type=int, default=10)
 
 #CNN
-parser.add_argument('--num_hidden', type=str, default='16,16')
+parser.add_argument('--num_hidden', type=str, default='40,40')
 parser.add_argument('--filter_size', type=int, default=5)
 parser.add_argument('--stride', type=int, default=1)
 parser.add_argument('--patch_size', type=int, default=16)
@@ -114,9 +114,9 @@ def test_lsm_wrapper(model):
     # test_input_handle = datasets_factory.data_provider(args)
     trainer.test_lsm(model, args, 'test_result')
 
-if os.path.exists(args.save_dir):
-    shutil.rmtree(args.save_dir)
-os.makedirs(args.save_dir)
+# if os.path.exists(args.save_dir):
+#     shutil.rmtree(args.save_dir)
+# os.makedirs(args.save_dir)
 
 if os.path.exists(args.gen_frm_dir):
     shutil.rmtree(args.gen_frm_dir)
