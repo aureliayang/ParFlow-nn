@@ -38,16 +38,15 @@ parser.add_argument('--img_width', type=int, default=64)
 
 #paths
 parser.add_argument('--init_cond_path', type=str, default='')
-parser.add_argument('--init_cond_filename', type=str, default='')
+parser.add_argument('--init_cond_filename', type=str, default='')  #associated with training_start_step (minus -1)
+parser.add_argument('--init_cond_test_path', type=str, default='')
+parser.add_argument('--init_cond_test_filename', type=str, default='')  #associated with test_start_step (minus -1)
 parser.add_argument('--static_inputs_path', type=str, default='')
-parser.add_argument('--static_inputs_filename', type=str, default='')
+parser.add_argument('--static_inputs_filename', type=str, default='') #combined and put in a new dir
 parser.add_argument('--forcings_path', type=str, default='')
-parser.add_argument('--targets_path', type=str, default='')
+parser.add_argument('--targets_path', type=str, default='') # forcings and targets may be in the same dir
 parser.add_argument('--target_norm_file', type=str, default='')
 parser.add_argument('--force_norm_file', type=str, default='')
-
-parser.add_argument('--init_cond_test_path', type=str, default='')
-parser.add_argument('--init_cond_test_filename', type=str, default='')
 parser.add_argument('--lsm_forcings_path', type=str, default='')
 parser.add_argument('--lsm_forcings_name', type=str, default='')
 

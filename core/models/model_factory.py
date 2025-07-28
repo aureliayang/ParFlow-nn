@@ -146,7 +146,7 @@ class Model(object):
             num_patch = num_patch_x*num_patch_y
 
             static_inputs = torch.empty((num_patch, 1, self.configs.static_channel, self.configs.patch_size,
-                                              self.configs.patch_size), dtype=torch.float)  # np.float32
+                                         self.configs.patch_size), dtype=torch.float)  # np.float32
             init_cond = torch.empty((num_patch, 1, self.configs.init_cond_channel, self.configs.patch_size, 
                                      self.configs.patch_size), dtype=torch.float)  # np.float32
             forcings_temp = torch.empty((num_patch, 1, self.configs.act_channel, self.configs.patch_size, 
