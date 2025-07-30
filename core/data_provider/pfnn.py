@@ -61,15 +61,6 @@ class InputHandle:
                 ". Consider to user iterators.begin() to rescan from the beginning of the iterators")
             return None
 
-        # init_cond_batch     = torch.zeros(self.batch_size, 1, self.init_cond_channel,
-        #                                   self.img_width, self.img_width).to(self.configs.device)
-        # static_inputs_batch = torch.zeros(self.batch_size, 1, self.static_channel,
-        #                                   self.img_width, self.img_width).to(self.configs.device)
-        # forcings_batch       = torch.zeros(self.batch_size, self.input_length, self.act_channel,
-        #                                   self.img_width, self.img_width).to(self.configs.device)
-        # targets_batch       = torch.zeros(self.batch_size, self.input_length, self.img_channel,
-        #                                   self.img_width, self.img_width).to(self.configs.device)
-
         init_cond_batch = self.init_cond[self.current_p:self.current_p + self.batch_size, :, :, :, :]
         static_inputs_batch = self.static_inputs[self.current_p:self.current_p + self.batch_size, :, :, :, :]
         forcings_batch = self.forcings[self.current_p:self.current_p + self.batch_size, :, :, :, :]
@@ -93,10 +84,10 @@ class DataProcess:
         self.input_param = configs
         
         # the root path and the full file name
-        self.init_cond_path = os.path.join(configs.init_cond_path, 
-                                           configs.init_cond_filename)   
-        self.init_cond_test_path = os.path.join(configs.init_cond_test_path,
-                                           configs.init_cond_test_filename)
+        # self.init_cond_path = os.path.join(configs.init_cond_path,
+        #                                    configs.init_cond_filename)
+        # self.init_cond_test_path = os.path.join(configs.init_cond_test_path,
+        #                                    configs.init_cond_test_filename)
         
         # currently, please combine static parameters manually and provide it path
         self.static_inputs_path = os.path.join(configs.static_inputs_path, 
@@ -112,9 +103,9 @@ class DataProcess:
         self.force_norm_path = os.path.join(configs.forcings_path,configs.force_norm_file)
         
         # the files should be continuous in time
-        self.training_start_step = configs.training_start_step
+        # self.training_start_step = configs.training_start_step
         self.training_timesteps  = configs.training_end_step - configs.training_start_step + 1
-        self.test_start_step = configs.test_start_step
+        # self.test_start_step = configs.test_start_step
         self.test_timesteps  = configs.test_end_step - configs.test_start_step + 1
         
         # the RNN length
@@ -130,24 +121,40 @@ class DataProcess:
         self.static_channel = configs.static_channel
         self.act_channel = configs.act_channel
         self.img_channel = configs.img_channel
+
+        # self.ss_stride_train = configs.ss_stride_train
+        # self.st_stride_train = configs.st_stride_train
+        # self.ss_stride_test = configs.ss_stride_test
+        # self.st_stride_test = configs.st_stride_test
         
     def load_data(self, mode='train'):
         
         # model is no use, but keep it here and can be removed later
         if mode == 'train':
-            start_step = self.training_start_step
-            timesteps  = self.training_timesteps
+            start_step = self.input_param.training_start_step
+            # timesteps  = self.training_timesteps
+            end_step = self.input_param.training_end_step
+            ss_stride = self.input_param.ss_stride_train
+            st_stride = self.input_param.st_stride_train
         else:
-            start_step = self.test_start_step
-            timesteps  = self.test_timesteps
+            start_step = self.input_param.test_start_step
+            # timesteps  = self.test_timesteps
+            end_step = self.input_param.test_end_step
+            ss_stride = self.input_param.ss_stride_test
+            st_stride = self.input_param.st_stride_test
         
-        # drop the residual cells
-        num_patch_y = self.img_height // self.patch_size 
-        num_patch_x = self.img_width // self.patch_size
-        num_patch = num_patch_x * num_patch_y
-        # drop the residual steps
-        num_seq = timesteps // self.input_length
-        framesteps = num_seq * self.input_length
+        coords_space = [
+            (y, x)
+            for y in range(0, self.img_height - self.patch_size + 1, ss_stride)
+            for x in range(0, self.img_width - self.patch_size + 1, ss_stride)
+        ]
+
+        coords_time = [
+            start_t
+            for start_t in range(start_step, end_step - self.input_length + 2, st_stride)
+        ]
+
+        num_patch, num_seq = len(coords_space), len(coords_time)
         
         init_cond = torch.empty((num_patch*num_seq, 1, self.init_cond_channel, self.patch_size, self.patch_size),
                                  dtype=torch.float)  # np.float32
@@ -155,79 +162,83 @@ class DataProcess:
         static_inputs_temp = torch.empty((num_patch, 1, self.static_channel, self.patch_size, self.patch_size),
                                           dtype=torch.float)  # np.float32
         
-        forcings_temp = torch.empty((num_patch, framesteps, self.act_channel, self.patch_size, self.patch_size),
-                                     dtype=torch.float)  # np.float32
+        forcings = torch.empty((num_patch*num_seq, self.input_length, self.act_channel, self.patch_size,
+                                     self.patch_size), dtype=torch.float)  # np.float32
         
-        targets_temp = torch.empty((num_patch, framesteps, self.img_channel, self.patch_size, self.patch_size),
-                                    dtype=torch.float)  # np.float32
+        targets = torch.empty((num_patch*num_seq, self.input_length, self.img_channel, self.patch_size,
+                                    self.patch_size), dtype=torch.float)  # np.float32
 
         # static
         static_inputs_name = self.static_inputs_path
         frame_np = read_pfb(get_absolute_path(static_inputs_name)).astype(np.float32)
-        frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size] # drop off
         frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
         mean = frame_im.mean(dim=(3,4), keepdim=True)
         std = frame_im.std(dim=(3,4), keepdim=True)
         frame_im = (frame_im-mean)/std
-        static_inputs_temp[:,:,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
+        for idx_s, (y, x) in enumerate(coords_space):
+            static_inputs_temp[idx_s:idx_s+1, :, :, :, :] = \
+                frame_im[:, :, :, y:y+self.patch_size, x:x+self.patch_size]
 
         frame_np = read_pfb(get_absolute_path(self.target_norm_path)).astype(np.float32)
-        frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
         frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
         mean_p = frame_im.mean(dim=(3,4), keepdim=True)
         std_p = frame_im.std(dim=(3,4), keepdim=True)
 
         frame_np = read_pfb(get_absolute_path(self.force_norm_path)).astype(np.float32)
-        frame_np = frame_np[1:11, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
         frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
         mean_a = frame_im.mean(dim=(3,4), keepdim=True)
         std_a = frame_im.std(dim=(3,4), keepdim=True)
 
-        # initial
-        if mode == 'train':
-            init_cond_name = self.init_cond_path
-        else:
-            init_cond_name = self.init_cond_test_path
+        # # initial
+        # if mode == 'train':
+        #     init_cond_name = self.init_cond_path
+        # else:
+        #     init_cond_name = self.init_cond_test_path
 
-        frame_np = read_pfb(get_absolute_path(init_cond_name)).astype(np.float32)
-        frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
-        frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
-        frame_im = (frame_im-mean_p)/std_p
-        init_cond[0:num_patch,:,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
+        for idx_t, start_t in enumerate(coords_time):
+            for i in range(self.input_length):
+                forcings_name = self.forcings_path + str(i+start_t).zfill(5) + ".pfb"
+                frame_np = read_pfb(get_absolute_path(forcings_name)).astype(np.float32)
+                frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
+                frame_im = (frame_im-mean_a)/std_a
+                for idx_s, (y, x) in enumerate(coords_space):
+                    forcings[idx_t*num_patch+idx_s:idx_t*num_patch+idx_s+1, i:i+1, :, :, :] = \
+                        frame_im[:, :, 1:11, y:y+self.patch_size, x:x+self.patch_size]
 
+                targets_name = self.targets_path + str(i+start_t).zfill(5) + ".pfb"
+                frame_np = read_pfb(get_absolute_path(targets_name)).astype(np.float32)
+                frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
+                frame_im = (frame_im-mean_p)/std_p
+                for idx_s, (y, x) in enumerate(coords_space):
+                    targets[idx_t*num_patch+idx_s:idx_t*num_patch+idx_s+1, i:i+1, :, :, :] = \
+                        frame_im[:, :, :, y:y+self.patch_size, x:x+self.patch_size]
 
-        # read forcings and targets
-        count = 0
-        for i in range(framesteps):
-            
-            forcings_name = self.forcings_path + str(i+start_step).zfill(5) + ".pfb"
-            frame_np = read_pfb(get_absolute_path(forcings_name)).astype(np.float32)
-            frame_np = frame_np[1:11, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
-            frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
-            frame_im = (frame_im-mean_a)/std_a
-            forcings_temp[:,i:i+1,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
-
-            targets_name = self.targets_path + str(i+start_step).zfill(5) + ".pfb"
-            frame_np = read_pfb(get_absolute_path(targets_name)).astype(np.float32)
-            frame_np = frame_np[:, 0:num_patch_y*self.patch_size, 0:num_patch_x*self.patch_size]
+            init_cond_name = self.targets_path + str(start_t-1).zfill(5) + ".pfb"
+            frame_np = read_pfb(get_absolute_path(init_cond_name)).astype(np.float32)
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
             frame_im = (frame_im-mean_p)/std_p
-            targets_temp[:,i:i+1,:,:,:] = preprocess.reshape_patch(frame_im, self.patch_size)
-            
-            if ((i+1) % self.input_length == 0) and (i+1 != framesteps) :
-                count = count + 1
-                init_cond[num_patch*count:num_patch*(count+1),0,:,:,:] \
-                    = targets_temp[:,i,:,:,:]
+            for idx_s, (y, x) in enumerate(coords_space):
+                init_cond[idx_t*num_patch+idx_s:idx_t*num_patch+idx_s+1, 0, :, :, :] = \
+                    frame_im[:, :, :, y:y+self.patch_size, x:x+self.patch_size]
                 
-        # # reshape forcings and targets
-        forcings = preprocess.reshape_patch_time(forcings_temp, self.input_length)
-        # forcings = forcings.to(self.input_param.device)
-        targets = preprocess.reshape_patch_time(targets_temp, self.input_length)
-        # targets = targets.to(self.input_param.device)
-        
-        # repeat static
         static_inputs = static_inputs_temp.repeat(num_seq,1,1,1,1) #.to(self.input_param.device)
-        # init_cond = init_cond.to(self.input_param.device)
+
+        # === 统计信息输出（按当前精度FP32） ===
+        bytes_per_element = 4  # FP32
+
+        total_elements = (
+            init_cond.numel() +
+            static_inputs.numel() +
+            forcings.numel() +
+            targets.numel()
+        )
+
+        mem_fp32 = total_elements * bytes_per_element / (1024**3)
+
+        print(f"Num patches: {num_patch}")
+        print(f"Num sequences: {num_seq}")
+        print(f"Total samples: {num_patch*num_seq}")
+        print(f"Estimated memory: {mem_fp32:.2f} GB")
                  
         return init_cond, static_inputs, forcings, targets, num_patch*num_seq
 
