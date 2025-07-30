@@ -46,6 +46,9 @@ class Model(object):
         print('load model:', checkpoint_path)
         stats = torch.load(checkpoint_path)
         self.network.load_state_dict(stats['net_param'])
+        # stats = torch.load(checkpoint_path, map_location='cpu')  # 强制先加载到CPU
+        # self.network.load_state_dict(stats['net_param'])
+        # self.network.to(self.configs.device)  # 再整体转到GPU
 
     def train(self, forcings, init_cond, static_inputs, targets):
         # forcings_tensor = torch.FloatTensor(forcings).to(self.configs.device)

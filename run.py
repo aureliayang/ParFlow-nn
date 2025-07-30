@@ -9,6 +9,7 @@ from core.data_provider import datasets_factory
 from core.models.model_factory import Model
 # from core.utils import preprocess
 import core.trainer as trainer
+import torch
 
 # -----------------------------------------------------------------------------
 parser = argparse.ArgumentParser(description='CONCN surrogate model - ParFlow-nn')
@@ -91,6 +92,7 @@ def train_wrapper(model):
     for itr in range(1, args.max_iterations + 1):
         if train_input_handle.no_batch_left():
             train_input_handle.begin(do_shuffle=True)
+
         forcings, init_cond, static_inputs, targets = train_input_handle.get_batch()
 
         trainer.train(model, forcings, init_cond, static_inputs, targets, args, itr)
@@ -114,15 +116,22 @@ def test_lsm_wrapper(model):
     # test_input_handle = datasets_factory.data_provider(args)
     trainer.test_lsm(model, args, 'test_result')
 
-# if os.path.exists(args.save_dir):
-#     shutil.rmtree(args.save_dir)
-# os.makedirs(args.save_dir)
+if os.path.exists(args.save_dir):
+    if not args.pretrained_model:
+        shutil.rmtree(args.save_dir)
+        os.makedirs(args.save_dir)
+else:
+    os.makedirs(args.save_dir)
 
 if os.path.exists(args.gen_frm_dir):
     shutil.rmtree(args.gen_frm_dir)
 os.makedirs(args.gen_frm_dir)
 
 print('Initializing models')
+
+
+torch.cuda.empty_cache()
+torch.cuda.reset_peak_memory_stats()
 
 model = Model(args)
 

@@ -61,21 +61,22 @@ class InputHandle:
                 ". Consider to user iterators.begin() to rescan from the beginning of the iterators")
             return None
 
-        init_cond_batch     = torch.zeros(self.batch_size, 1, self.init_cond_channel,
-                                          self.img_width, self.img_width).to(self.configs.device)
-        static_inputs_batch = torch.zeros(self.batch_size, 1, self.static_channel,
-                                          self.img_width, self.img_width).to(self.configs.device)
-        forcings_batch       = torch.zeros(self.batch_size, self.input_length, self.act_channel,
-                                          self.img_width, self.img_width).to(self.configs.device)
-        targets_batch       = torch.zeros(self.batch_size, self.input_length, self.img_channel,
-                                          self.img_width, self.img_width).to(self.configs.device)
+        # init_cond_batch     = torch.zeros(self.batch_size, 1, self.init_cond_channel,
+        #                                   self.img_width, self.img_width).to(self.configs.device)
+        # static_inputs_batch = torch.zeros(self.batch_size, 1, self.static_channel,
+        #                                   self.img_width, self.img_width).to(self.configs.device)
+        # forcings_batch       = torch.zeros(self.batch_size, self.input_length, self.act_channel,
+        #                                   self.img_width, self.img_width).to(self.configs.device)
+        # targets_batch       = torch.zeros(self.batch_size, self.input_length, self.img_channel,
+        #                                   self.img_width, self.img_width).to(self.configs.device)
 
         init_cond_batch = self.init_cond[self.current_p:self.current_p + self.batch_size, :, :, :, :]
         static_inputs_batch = self.static_inputs[self.current_p:self.current_p + self.batch_size, :, :, :, :]
         forcings_batch = self.forcings[self.current_p:self.current_p + self.batch_size, :, :, :, :]
         targets_batch = self.targets[self.current_p:self.current_p + self.batch_size, :, :, :, :]
             
-        return forcings_batch, init_cond_batch, static_inputs_batch, targets_batch
+        return forcings_batch.to(self.configs.device), init_cond_batch.to(self.configs.device), \
+                static_inputs_batch.to(self.configs.device), targets_batch.to(self.configs.device)
 
     def print_stat(self):
         logger.info("Iterator Name: " + self.name)
@@ -220,13 +221,13 @@ class DataProcess:
                 
         # # reshape forcings and targets
         forcings = preprocess.reshape_patch_time(forcings_temp, self.input_length)
-        forcings = forcings.to(self.input_param.device)    
+        # forcings = forcings.to(self.input_param.device)
         targets = preprocess.reshape_patch_time(targets_temp, self.input_length)
-        targets = targets.to(self.input_param.device)
+        # targets = targets.to(self.input_param.device)
         
         # repeat static
-        static_inputs = static_inputs_temp.repeat(num_seq,1,1,1,1).to(self.input_param.device)
-        init_cond = init_cond.to(self.input_param.device)
+        static_inputs = static_inputs_temp.repeat(num_seq,1,1,1,1) #.to(self.input_param.device)
+        # init_cond = init_cond.to(self.input_param.device)
                  
         return init_cond, static_inputs, forcings, targets, num_patch*num_seq
 
