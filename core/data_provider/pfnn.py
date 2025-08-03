@@ -24,7 +24,7 @@ class InputHandle:
         self.targets = targets
         self.total_seq = total_seq
         self.current_p = 0
-        self.input_length = configs.input_length
+        # self.input_length = configs.input_length
         self.init_cond_channel = configs.init_cond_channel
         self.static_channel = configs.static_channel
         self.act_channel = configs.act_channel
@@ -109,7 +109,8 @@ class DataProcess:
         self.test_timesteps  = configs.test_end_step - configs.test_start_step + 1
         
         # the RNN length
-        self.input_length = configs.input_length
+        self.input_length_train = configs.input_length_train
+        self.input_length_test = configs.input_length_test
         
         # the origional size of the modeling domain and the subdomain size you want to 
         # insert into the CNN
@@ -136,12 +137,14 @@ class DataProcess:
             end_step = self.input_param.training_end_step
             ss_stride = self.input_param.ss_stride_train
             st_stride = self.input_param.st_stride_train
+            input_length = self.input_length_train
         else:
             start_step = self.input_param.test_start_step
             # timesteps  = self.test_timesteps
             end_step = self.input_param.test_end_step
             ss_stride = self.input_param.ss_stride_test
             st_stride = self.input_param.st_stride_test
+            input_length = self.input_length_test
         
         coords_space = [
             (y, x)
@@ -151,7 +154,7 @@ class DataProcess:
 
         coords_time = [
             start_t
-            for start_t in range(start_step, end_step - self.input_length + 2, st_stride)
+            for start_t in range(start_step, end_step - input_length + 2, st_stride)
         ]
 
         num_patch, num_seq = len(coords_space), len(coords_time)
@@ -162,10 +165,10 @@ class DataProcess:
         static_inputs_temp = torch.empty((num_patch, 1, self.static_channel, self.patch_size, self.patch_size),
                                           dtype=torch.float)  # np.float32
         
-        forcings = torch.empty((num_patch*num_seq, self.input_length, self.act_channel, self.patch_size,
+        forcings = torch.empty((num_patch*num_seq, input_length, self.act_channel, self.patch_size,
                                      self.patch_size), dtype=torch.float)  # np.float32
         
-        targets = torch.empty((num_patch*num_seq, self.input_length, self.img_channel, self.patch_size,
+        targets = torch.empty((num_patch*num_seq, input_length, self.img_channel, self.patch_size,
                                     self.patch_size), dtype=torch.float)  # np.float32
 
         # static
@@ -196,7 +199,7 @@ class DataProcess:
         #     init_cond_name = self.init_cond_test_path
 
         for idx_t, start_t in enumerate(coords_time):
-            for i in range(self.input_length):
+            for i in range(input_length):
                 forcings_name = self.forcings_path + str(i+start_t).zfill(5) + ".pfb"
                 frame_np = read_pfb(get_absolute_path(forcings_name)).astype(np.float32)
                 frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)

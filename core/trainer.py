@@ -38,7 +38,7 @@ def test(model, test_input_handle, configs, itr):
         # save prediction examples
         path = os.path.join(res_path, str(batch_id))
         os.mkdir(path)
-        num_seq = (configs.test_end_step - configs.test_start_step + 1) // configs.input_length
+        num_seq = (configs.test_end_step - configs.test_start_step + 1) // configs.input_length_test
         num_patch_y = configs.img_height // configs.patch_size 
         num_patch_x = configs.img_width // configs.patch_size
 
@@ -60,7 +60,7 @@ def test(model, test_input_handle, configs, itr):
 
         print ('RMSE_TOTAL =', np.sqrt(np.mean((img_gen - img_tar) ** 2)))
 
-        for i in range(num_seq*configs.input_length):
+        for i in range(num_seq*configs.input_length_test):
             file_name = 'nn_gen.press.' + str(i+configs.test_start_step).zfill(5) + '.pfb'
             file_name = os.path.join(path, file_name)
             write_pfb(file_name, img_gen[i,:,:,:], dist=False)
