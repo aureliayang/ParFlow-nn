@@ -23,8 +23,6 @@ python -u run.py \
     --static_inputs_filename static_inputs_combined.pfb \
     --forcings_path /home/cy15/unname/pfb_shallow_2nd \
     --targets_path /home/cy15/unname/pfb_shallow_2nd \
-    --force_norm_file unname_test.out.evaptrans.00200.pfb \
-    --target_norm_file unname_test.out.press.00200.pfb \
     --lsm_forcings_path /home/cy15/E5L \
     --lsm_forcings_name E5L \
     --init_cond_channel 11 \
@@ -49,3 +47,5 @@ python -u run.py \
     # --reverse_input 1 \
     # --init_cond_path /home/cy15/unname/pfb_shallow_2nd \
     # --init_cond_filename unname_test.out.press.00000.pfb \
+    # --force_norm_file unname_test.out.evaptrans.00200.pfb \
+    # --target_norm_file unname_test.out.press.00200.pfb \

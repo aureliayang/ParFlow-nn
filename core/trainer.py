@@ -42,13 +42,17 @@ def test(model, test_input_handle, configs, itr):
         num_patch_y = configs.img_height // configs.patch_size 
         num_patch_x = configs.img_width // configs.patch_size
 
-        target_norm_path = os.path.join(configs.targets_path,configs.target_norm_file)
+        # target_norm_path = os.path.join(configs.targets_path,configs.target_norm_file)
 
-        frame_np = read_pfb(get_absolute_path(target_norm_path)).astype(np.float32)
-        frame_np = frame_np[:, 0:num_patch_y*configs.patch_size, 0:num_patch_x*configs.patch_size]
-        frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
-        mean_p = frame_im.mean(dim=(3,4), keepdim=True)
-        std_p = frame_im.std(dim=(3,4), keepdim=True)
+        # frame_np = read_pfb(get_absolute_path(target_norm_path)).astype(np.float32)
+        # frame_np = frame_np[:, 0:num_patch_y*configs.patch_size, 0:num_patch_x*configs.patch_size]
+        # frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
+        # mean_p = frame_im.mean(dim=(3,4), keepdim=True)
+        # std_p = frame_im.std(dim=(3,4), keepdim=True)
+        target_mean_list = [float(x) for x in configs.target_mean.split(',')]
+        target_std_list = [float(x) for x in configs.target_std.split(',')]
+        mean_p = torch.tensor(target_mean_list).view(1, 1, -1, 1, 1)
+        std_p = torch.tensor(target_std_list).view(1, 1, -1, 1, 1)
 
         img_gen = preprocess.reshape_patch_back_time(img_gen, num_patch_x*num_patch_y)
         img_gen = preprocess.reshape_patch_back(img_gen, num_patch_x, num_patch_y)

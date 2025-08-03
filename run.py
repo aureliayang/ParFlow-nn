@@ -46,8 +46,17 @@ parser.add_argument('--static_inputs_path', type=str, default='')
 parser.add_argument('--static_inputs_filename', type=str, default='') #combined and put in a new dir
 parser.add_argument('--forcings_path', type=str, default='')
 parser.add_argument('--targets_path', type=str, default='') # forcings and targets may be in the same dir
-parser.add_argument('--target_norm_file', type=str, default='')
-parser.add_argument('--force_norm_file', type=str, default='')
+# parser.add_argument('--target_norm_file', type=str, default='')
+# parser.add_argument('--force_norm_file', type=str, default='')
+parser.add_argument('--target_mean', type=str, default='50.6647919,2.18094949,1.19974567,0.5132593,\
+                    0.11379735,-0.12730431,-0.27250824,-0.36000992,-0.41267873,-0.44452377,-0.46438877')
+parser.add_argument('--target_std', type=str, default='11.32939271,0.93890168,0.81459955,0.69557101,\
+                    0.59929806,0.54758706,0.52029829,0.50644763,0.49912652,0.49520303,0.49344641')
+parser.add_argument('--force_mean', type=str, default='0.00000000e+00,-1.65678623e-06,-2.55343334e-06,-9.06575188e-06,\
+                    -2.91817793e-05,-7.71748930e-05,-1.55229783e-04,-2.26101332e-04,-2.38931359e-04,-1.84304437e-04,9.87172230e-03')
+parser.add_argument('--force_std', type=str, default='0.00000000e+00,2.97740304e-06,4.71635086e-06,1.69609972e-05,\
+                    5.46345691e-05,1.41404926e-04,2.77901646e-04,4.11366363e-04,4.57953708e-04,3.71477025e-04,3.55238828e-02')
+
 parser.add_argument('--lsm_forcings_path', type=str, default='')
 parser.add_argument('--lsm_forcings_name', type=str, default='')
 

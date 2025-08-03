@@ -89,7 +89,21 @@ class Model(object):
             decouple_loss += d_loss_step
         decouple_loss = torch.mean(torch.stack(decouple_loss, dim=0))
         next_frames = torch.stack(next_frames, dim=1)
-        loss = self.network.MSE_criterion(next_frames, targets) + self.configs.decouple_beta * decouple_loss
+
+        # 计算预测梯度
+        dy_pred = next_frames[:, :, :, 1:, :] - next_frames[:, :, :, :-1, :]
+        dx_pred = next_frames[:, :, :, :, 1:] - next_frames[:, :, :, :, :-1]
+
+        # 计算真实梯度
+        dy_true = targets[:, :, :, 1:, :] - targets[:, :, :, :-1, :]
+        dx_true = targets[:, :, :, :, 1:] - targets[:, :, :, :, :-1]
+
+        # 梯度差异 loss
+        grad_loss = torch.mean(torch.abs(dy_pred - dy_true)) + \
+                    torch.mean(torch.abs(dx_pred - dx_true))
+
+        loss = self.network.MSE_criterion(next_frames, targets) + grad_loss + \
+            self.configs.decouple_beta * decouple_loss
 
         loss.backward()
         self.optimizer.step()
