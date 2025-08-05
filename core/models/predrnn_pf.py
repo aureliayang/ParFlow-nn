@@ -50,27 +50,8 @@ class RNN(nn.Module):
         # batch, timesteps, channels, height, width = forcings.shape
         batch, channels, height, width = forcings.shape
 
-        # next_frames = []
-        # h_t = []
-        # c_t = []
-        # delta_c_list = []
-        # delta_m_list = []
         decouple_loss = []
-
-        # for i in range(self.num_layers):
-        #     zeros = torch.zeros([batch, self.num_hidden[i], height, width]).cuda()
-        #     h_t.append(zeros)
-        #     c_t.append(zeros)
-        #     delta_c_list.append(zeros)
-        #     delta_m_list.append(zeros)
         
-        # memory = self.memory_encoder(init_cond[:, 0])
-        # c_t = list(torch.split(self.cell_encoder(static_inputs[:, 0]), self.num_hidden, dim=1))
-        
-        # net = init_cond[:, 0]
-        # net_temp = []
-        # for t in range(timesteps):
-        # action = forcings[:, t]
         action = forcings
 
         h_t[0], c_t[0], memory, delta_c, delta_m = self.cell_list[0](net, action, h_t[0], c_t[0], memory)

@@ -13,22 +13,13 @@ class InputHandle:
     def __init__(self, init_cond, static_inputs, forcings, targets, total_seq, configs, mode):
         self.configs = configs
         self.name = configs.pf_runname
-        if mode == 'train':
-            self.batch_size = configs.batch_size
-        else:
-            self.batch_size = total_seq
-        self.img_width = configs.patch_size
+        self.batch_size = configs.batch_size if mode == 'train' else total_seq
         self.init_cond = init_cond
         self.static_inputs = static_inputs
         self.forcings = forcings
         self.targets = targets
         self.total_seq = total_seq
         self.current_p = 0
-        # self.input_length = configs.input_length
-        self.init_cond_channel = configs.init_cond_channel
-        self.static_channel = configs.static_channel
-        self.act_channel = configs.act_channel
-        self.img_channel = configs.img_channel
 
     def total(self):
         return self.total_seq
@@ -83,12 +74,6 @@ class DataProcess:
         
         self.input_param = configs
         
-        # the root path and the full file name
-        # self.init_cond_path = os.path.join(configs.init_cond_path,
-        #                                    configs.init_cond_filename)
-        # self.init_cond_test_path = os.path.join(configs.init_cond_test_path,
-        #                                    configs.init_cond_test_filename)
-        
         # currently, please combine static parameters manually and provide it path
         self.static_inputs_path = os.path.join(configs.static_inputs_path, 
                                                configs.static_inputs_filename)
@@ -99,18 +84,10 @@ class DataProcess:
         targets_filename = configs.pf_runname + ".out.press."
         self.targets_path = os.path.join(configs.targets_path, targets_filename) 
 
-        # self.target_norm_path = os.path.join(configs.targets_path,configs.target_norm_file)
-        # self.force_norm_path = os.path.join(configs.forcings_path,configs.force_norm_file)
         self.target_mean_str = configs.target_mean
         self.target_std_str = configs.target_std
         self.force_mean_str = configs.force_mean
         self.force_std_str = configs.force_std
-        
-        # the files should be continuous in time
-        # self.training_start_step = configs.training_start_step
-        # self.training_timesteps  = configs.training_end_step - configs.training_start_step + 1
-        # self.test_start_step = configs.test_start_step
-        # self.test_timesteps  = configs.test_end_step - configs.test_start_step + 1
         
         # the RNN length
         self.input_length_train = configs.input_length_train
@@ -126,25 +103,18 @@ class DataProcess:
         self.static_channel = configs.static_channel
         self.act_channel = configs.act_channel
         self.img_channel = configs.img_channel
-
-        # self.ss_stride_train = configs.ss_stride_train
-        # self.st_stride_train = configs.st_stride_train
-        # self.ss_stride_test = configs.ss_stride_test
-        # self.st_stride_test = configs.st_stride_test
         
     def load_data(self, mode='train'):
         
         # model is no use, but keep it here and can be removed later
         if mode == 'train':
             start_step = self.input_param.training_start_step
-            # timesteps  = self.training_timesteps
             end_step = self.input_param.training_end_step
             ss_stride = self.input_param.ss_stride_train
             st_stride = self.input_param.st_stride_train
             input_length = self.input_length_train
         else:
             start_step = self.input_param.test_start_step
-            # timesteps  = self.test_timesteps
             end_step = self.input_param.test_end_step
             ss_stride = self.input_param.ss_stride_test
             st_stride = self.input_param.st_stride_test
@@ -186,16 +156,6 @@ class DataProcess:
             static_inputs_temp[idx_s:idx_s+1, :, :, :, :] = \
                 frame_im[:, :, :, y:y+self.patch_size, x:x+self.patch_size]
 
-        # frame_np = read_pfb(get_absolute_path(self.target_norm_path)).astype(np.float32)
-        # frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
-        # mean_p = frame_im.mean(dim=(3,4), keepdim=True)
-        # std_p = frame_im.std(dim=(3,4), keepdim=True)
-
-        # frame_np = read_pfb(get_absolute_path(self.force_norm_path)).astype(np.float32)
-        # frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
-        # mean_a = frame_im.mean(dim=(3,4), keepdim=True)
-        # std_a = frame_im.std(dim=(3,4), keepdim=True)
-
         # 转成浮点列表
         target_mean_list = [float(x) for x in self.target_mean_str.split(',')]
         target_std_list = [float(x) for x in self.target_std_str.split(',')]
@@ -206,12 +166,6 @@ class DataProcess:
         force_std_list = [float(x) for x in self.force_std_str.split(',')]
         mean_a = torch.tensor(force_mean_list).view(1, 1, -1, 1, 1)
         std_a = torch.tensor(force_std_list).view(1, 1, -1, 1, 1)
-
-        # # initial
-        # if mode == 'train':
-        #     init_cond_name = self.init_cond_path
-        # else:
-        #     init_cond_name = self.init_cond_test_path
 
         for idx_t, start_t in enumerate(coords_time):
             for i in range(input_length):

@@ -34,15 +34,15 @@ class Model(object):
 
         self.optimizer = AdamW(self.network.parameters(), lr=configs.lr, betas=[0.8, 0.95])
         # self.scheduler = lr_scheduler.StepLR(self.optimizer, step_size=1000, gamma=0.5)
-        self.scheduler = lr_scheduler.OneCycleLR(
-            self.optimizer,
-            max_lr=configs.lr*5,                # 峰值 = 初始 5 倍
-            total_steps=configs.max_iterations, # 总 step（你预估）
-            pct_start=0.3,                      # 前 30% warm-up
-            anneal_strategy='cos',              # 余弦下降
-            div_factor=25.0,                    # 初始 = 峰值/25
-            final_div_factor=1e4                # 最终 = 峰值/10000
-        )
+        # self.scheduler = lr_scheduler.OneCycleLR(
+        #     self.optimizer,
+        #     max_lr=configs.lr*5,                # 峰值 = 初始 5 倍
+        #     total_steps=configs.max_iterations, # 总 step（你预估）
+        #     pct_start=0.3,                      # 前 30% warm-up
+        #     anneal_strategy='cos',              # 余弦下降
+        #     div_factor=25.0,                    # 初始 = 峰值/25
+        #     final_div_factor=1e4                # 最终 = 峰值/10000
+        # )
 
     def save(self, itr):
         stats = {}
@@ -56,16 +56,7 @@ class Model(object):
         stats = torch.load(checkpoint_path)
         self.network.load_state_dict(stats['net_param'])
 
-        # stats = torch.load(checkpoint_path, map_location='cpu')  # 强制先加载到CPU
-        # self.network.load_state_dict(stats['net_param'])
-        # self.network.to(self.configs.device)  # 再整体转到GPU
-
     def train(self, forcings, init_cond, static_inputs, targets):
-        # forcings_tensor = torch.FloatTensor(forcings).to(self.configs.device)
-        # init_cond_tensor = torch.FloatTensor(init_cond).to(self.configs.device)
-        # static_inputs_tensor = torch.FloatTensor(static_inputs).to(self.configs.device)
-        # targets_tensor = torch.FloatTensor(targets).to(self.configs.device)
-        # mask_tensor = torch.FloatTensor(mask).to(self.configs.device)
         self.optimizer.zero_grad()
 
         batch, timesteps, channels, height, width = forcings.shape
@@ -83,6 +74,7 @@ class Model(object):
             c_t.append(zeros)
             delta_c_list.append(zeros)
             delta_m_list.append(zeros)
+
         memory = self.network.memory_encoder(init_cond[:, 0])
         c_t = list(torch.split(self.network.cell_encoder(static_inputs[:, 0]), self.num_hidden, dim=1))
 
@@ -90,11 +82,9 @@ class Model(object):
         net_temp = []
 
         for t in range(timesteps):
-            net, net_temp, d_loss_step, h_t, c_t, memory, delta_c_list, delta_m_list \
-                  = self.network(forcings[:, t], net, net_temp,
-                                 h_t, c_t, memory, delta_c_list, delta_m_list)
+            net, net_temp, d_loss_step, h_t, c_t, memory, delta_c_list, delta_m_list = \
+            self.network(forcings[:, t], net, net_temp, h_t, c_t, memory, delta_c_list, delta_m_list)
             next_frames.append(net)
-            # decouple_loss.append(torch.mean(torch.stack(d_loss_step)))
             decouple_loss += d_loss_step
         decouple_loss = torch.mean(torch.stack(decouple_loss, dim=0))
         next_frames = torch.stack(next_frames, dim=1)
@@ -111,18 +101,17 @@ class Model(object):
         grad_loss = torch.mean(torch.abs(dy_pred - dy_true)) + \
                     torch.mean(torch.abs(dx_pred - dx_true))
 
-        loss = self.network.MSE_criterion(next_frames, targets) + grad_loss + \
+        loss = self.network.MSE_criterion(next_frames, targets) + \
+            self.configs.grad_beta * grad_loss + \
             self.configs.decouple_beta * decouple_loss
 
         loss.backward()
         self.optimizer.step()
-        self.scheduler.step()
+        # self.scheduler.step()
         # return loss.detach().cpu().numpy()
         return loss.item()
 
     def test(self, forcings, init_cond, static_inputs):
-        # frames_tensor = torch.FloatTensor(frames).to(self.configs.device)
-        # mask_tensor = torch.FloatTensor(mask).to(self.configs.device)
         with torch.no_grad():
             batch, timesteps, channels, height, width = forcings.shape
 
@@ -131,7 +120,6 @@ class Model(object):
             c_t = []
             delta_c_list = []
             delta_m_list = []
-            # decouple_loss = []
 
             for i in range(self.num_layers):
                 zeros = torch.zeros([batch, self.num_hidden[i], height, width]).cuda()
@@ -148,17 +136,11 @@ class Model(object):
 
             for t in range(timesteps):
 
-                net, net_temp, _, h_t, c_t, memory, delta_c_list, delta_m_list \
-                    = self.network(forcings[:, t], net, net_temp,
-                                    h_t, c_t, memory, delta_c_list, delta_m_list)
+                net, net_temp, _, h_t, c_t, memory, delta_c_list, delta_m_list = \
+                self.network(forcings[:, t], net, net_temp, h_t, c_t, memory, delta_c_list, delta_m_list)
                 next_frames.append(net)
-                # decouple_loss.append(d_loss_step)
-            # decouple_loss = torch.mean(torch.stack(decouple_loss, dim=0))
             next_frames = torch.stack(next_frames, dim=1)
-            # loss = self.network.MSE_criterion(next_frames, targets) + self.configs.beta * decouple_loss
 
-            # next_frames, _ = self.network(forcings, init_cond, static_inputs, targets)
-        # return next_frames.detach().cpu().numpy()
         return next_frames
 
     def test_lsm(self):

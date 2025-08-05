@@ -9,12 +9,15 @@ python -u run.py \
     --model_name predrnn_pf \
     --save_dir checkpoints/pfnn_predrnn \
     --gen_frm_dir results/pfnn_predrnn \
-    --training_start_step 2401 \
-    --training_end_step 4800 \
-    --test_start_step 4801 \
-    --test_end_step 5040 \
+    --training_start_step 4601 \
+    --training_end_step 7000 \
+    --test_start_step 7001 \
+    --test_end_step 7240 \
     --img_height 146 \
     --img_width 252 \
+    --input_length_train 120 \
+    --input_length_test  240 \
+    --patch_size 16 \
     --ss_stride_train 12 \
     --st_stride_train 90 \
     --ss_stride_test 16 \
@@ -27,9 +30,6 @@ python -u run.py \
     --static_channel 40 \
     --act_channel 10 \
     --img_channel 11 \
-    --input_length_train 120 \
-    --input_length_test  240 \
-    --patch_size 16 \
     --lr 0.0003 \
     --batch_size 16 \
     --max_iterations 20000 \
