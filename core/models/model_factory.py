@@ -101,15 +101,21 @@ class Model(object):
         grad_loss = torch.mean(torch.abs(dy_pred - dy_true)) + \
                     torch.mean(torch.abs(dx_pred - dx_true))
 
-        loss = self.network.MSE_criterion(next_frames, targets) + \
-            self.configs.grad_beta * grad_loss + \
-            self.configs.decouple_beta * decouple_loss
+        # loss = self.network.MSE_criterion(next_frames, targets) + \
+        #     self.configs.grad_beta * grad_loss + \
+        #     self.configs.decouple_beta * decouple_loss
 
-        loss.backward()
+        mse_loss = self.network.MSE_criterion(next_frames, targets)
+        grad_component = self.configs.grad_beta * grad_loss
+        decouple_component = self.configs.decouple_beta * decouple_loss
+
+        total_loss = mse_loss + grad_component + decouple_component
+
+        total_loss.backward()
         self.optimizer.step()
         # self.scheduler.step()
         # return loss.detach().cpu().numpy()
-        return loss.item()
+        return total_loss.item(), mse_loss.item(), grad_component.item(), decouple_component.item()
 
     def test(self, forcings, init_cond, static_inputs):
         with torch.no_grad():

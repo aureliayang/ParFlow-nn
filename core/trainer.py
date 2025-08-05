@@ -13,15 +13,23 @@ from parflow.tools.fs import get_absolute_path
 
 
 def train(model, forcings, init_cond, static_inputs, targets, configs, itr):
-    cost = model.train(forcings, init_cond, static_inputs, targets)
+    cost, cost1, cost2, cost3 = model.train(forcings, init_cond, static_inputs, targets)
     # if configs.reverse_input:
     #     ims_rev = np.flip(ims, axis=1).copy()
     #     cost += model.train(ims_rev, real_input_flag)
     #     cost = cost / 2
 
-    if itr % configs.display_interval == 0:
-        print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'itr: ' + str(itr),'training loss: ' + str(cost))
+    # if itr % configs.display_interval == 0:
+    #     print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'itr: ' + str(itr),'training loss: ' \
+    #           + str(cost))
         # print('training loss: ' + str(cost))
+    if itr % configs.display_interval == 0:
+        print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            f"itr: {itr} "
+            f"total: {cost:.6f} "
+            f"MSE: {cost1:.6f} "
+            f"grad: {cost2:.6f} "
+            f"decouple: {cost3:.6f}")
 
 def test(model, test_input_handle, configs, itr):
     print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'test...')
