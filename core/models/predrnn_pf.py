@@ -81,6 +81,7 @@ class RNN(nn.Module):
             h_t[i], c_t[i], memory, delta_c, delta_m = self.cell_list[i](h_t[i - 1], action, h_t[i], c_t[i], memory)
             delta_c_list[i] = F.normalize(self.adapter(delta_c).view(delta_c.shape[0], delta_c.shape[1], -1), dim=2)
             delta_m_list[i] = F.normalize(self.adapter(delta_m).view(delta_m.shape[0], delta_m.shape[1], -1), dim=2)
+        for i in range(self.num_layers):
             decouple_loss.append(torch.mean(torch.abs(
                          torch.cosine_similarity(delta_c_list[i], delta_m_list[i], dim=2))))
  

@@ -108,9 +108,9 @@ class DataProcess:
         
         # the files should be continuous in time
         # self.training_start_step = configs.training_start_step
-        self.training_timesteps  = configs.training_end_step - configs.training_start_step + 1
+        # self.training_timesteps  = configs.training_end_step - configs.training_start_step + 1
         # self.test_start_step = configs.test_start_step
-        self.test_timesteps  = configs.test_end_step - configs.test_start_step + 1
+        # self.test_timesteps  = configs.test_end_step - configs.test_start_step + 1
         
         # the RNN length
         self.input_length_train = configs.input_length_train

@@ -23,8 +23,6 @@ python -u run.py \
     --static_inputs_filename static_inputs_combined.pfb \
     --forcings_path /home/cy15/unname/pfb_shallow_2nd \
     --targets_path /home/cy15/unname/pfb_shallow_2nd \
-    --lsm_forcings_path /home/cy15/E5L \
-    --lsm_forcings_name E5L \
     --init_cond_channel 11 \
     --static_channel 40 \
     --act_channel 10 \
@@ -38,7 +36,10 @@ python -u run.py \
     --display_interval 100 \
     --test_interval 1000 \
     --snapshot_interval 5000 \
+    --lsm_forcings_path /home/cy15/E5L \
+    --lsm_forcings_name E5L \
     --pretrained_model /home/cy15/ParFlow-nn/checkpoints/pfnn_predrnn/model.ckpt-20000
+
     # --init_cond_test_path /home/cy15/unname/pfb_shallow_2nd \
     # --init_cond_test_filename unname_test.out.press.01200.pfb \
     # necessary for lsm test

@@ -32,8 +32,17 @@ class Model(object):
         else:
             raise ValueError('Name of network unknown %s' % configs.model_name)
 
-        self.optimizer = AdamW(self.network.parameters(), lr=configs.lr, betas=[0.8, 0.95], weight_decay=1e-2)
-        self.scheduler = lr_scheduler.StepLR(self.optimizer, step_size=1000, gamma=0.5)
+        self.optimizer = AdamW(self.network.parameters(), lr=configs.lr, betas=[0.8, 0.95])
+        # self.scheduler = lr_scheduler.StepLR(self.optimizer, step_size=1000, gamma=0.5)
+        self.scheduler = lr_scheduler.OneCycleLR(
+            self.optimizer,
+            max_lr=configs.lr*5,                # 峰值 = 初始 5 倍
+            total_steps=configs.max_iterations, # 总 step（你预估）
+            pct_start=0.3,                      # 前 30% warm-up
+            anneal_strategy='cos',              # 余弦下降
+            div_factor=25.0,                    # 初始 = 峰值/25
+            final_div_factor=1e4                # 最终 = 峰值/10000
+        )
 
     def save(self, itr):
         stats = {}
@@ -107,7 +116,7 @@ class Model(object):
 
         loss.backward()
         self.optimizer.step()
-        # self.scheduler.step()
+        self.scheduler.step()
         # return loss.detach().cpu().numpy()
         return loss.item()
 
