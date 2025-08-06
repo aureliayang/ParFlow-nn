@@ -15,9 +15,9 @@ python -u run.py \
     --test_end_step 7240 \
     --img_height 146 \
     --img_width 252 \
+    --patch_size 16 \
     --input_length_train 120 \
     --input_length_test  240 \
-    --patch_size 16 \
     --ss_stride_train 12 \
     --st_stride_train 90 \
     --ss_stride_test 16 \

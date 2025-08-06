@@ -153,22 +153,19 @@ class Model(object):
 
         with torch.no_grad():
 
-            #get init and static, reshape
-            num_patch_y = self.configs.img_height // self.configs.patch_size 
-            num_patch_x = self.configs.img_width // self.configs.patch_size
-            length_x = num_patch_x*self.configs.patch_size
-            length_y = num_patch_y*self.configs.patch_size
+            nx, ny = self.configs.img_width, self.configs.img_height
+            num_patch_y, num_patch_x = ny // self.configs.patch_size, nx // self.configs.patch_size
+            length_y, length_x = num_patch_y*self.configs.patch_size, num_patch_x*self.configs.patch_size
             num_patch = num_patch_x*num_patch_y
 
             static_inputs = torch.empty((num_patch, 1, self.configs.static_channel, self.configs.patch_size,
                                          self.configs.patch_size), dtype=torch.float)  # np.float32
             init_cond = torch.empty((num_patch, 1, self.configs.init_cond_channel, self.configs.patch_size, 
                                      self.configs.patch_size), dtype=torch.float)  # np.float32
-            forcings_temp = torch.empty((num_patch, 1, self.configs.act_channel, self.configs.patch_size, 
+            forcings = torch.empty((num_patch, 1, self.configs.act_channel, self.configs.patch_size,
                                          self.configs.patch_size), dtype=torch.float)  # np.float32
             # static
-            static_inputs_name = os.path.join(self.configs.static_inputs_path, 
-                                              self.configs.static_inputs_filename) 
+            static_inputs_name = os.path.join(self.configs.static_inputs_path, self.configs.static_inputs_filename)
             frame_np = read_pfb(get_absolute_path(static_inputs_name)).astype(np.float32)
             frame_np = frame_np[:, :length_y, :length_x] # drop off
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
@@ -178,22 +175,20 @@ class Model(object):
             static_inputs[:,:,:,:,:] = preprocess.reshape_patch(frame_im, self.configs.patch_size)
             static_inputs = static_inputs.to(self.configs.device)
 
-            target_norm_path = os.path.join(self.configs.targets_path,self.configs.target_norm_file)
-            frame_np = read_pfb(get_absolute_path(target_norm_path)).astype(np.float32)
-            frame_np = frame_np[:, :length_y, :length_x]
-            frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
-            mean_p = frame_im.mean(dim=(3,4), keepdim=True)
-            std_p = frame_im.std(dim=(3,4), keepdim=True)
+            target_mean_list = [float(x) for x in self.configs.target_mean.split(',')]
+            target_std_list = [float(x) for x in self.configs.target_std.split(',')]
+            mean_p = torch.tensor(target_mean_list).view(1, 1, -1, 1, 1)
+            std_p = torch.tensor(target_std_list).view(1, 1, -1, 1, 1)
 
-            force_norm_path = os.path.join(self.configs.forcings_path,self.configs.force_norm_file)
-            frame_np = read_pfb(get_absolute_path(force_norm_path)).astype(np.float32)
-            frame_np = frame_np[1:11, :length_y, :length_x]  #10 layers
-            frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
-            mean_a = frame_im.mean(dim=(3,4), keepdim=True)
-            std_a = frame_im.std(dim=(3,4), keepdim=True)
-            
-            init_cond_name = os.path.join(self.configs.init_cond_test_path,
-                                          self.configs.init_cond_test_filename)
+            force_mean_list = [float(x) for x in self.configs.force_mean.split(',')]
+            force_std_list = [float(x) for x in self.configs.force_std.split(',')]
+            mean_a = torch.tensor(force_mean_list).view(1, 1, -1, 1, 1)
+            std_a = torch.tensor(force_std_list).view(1, 1, -1, 1, 1)
+
+            targets_filename = self.configs.pf_runname + ".out."
+            targets_path = os.path.join(self.configs.targets_path, targets_filename)
+
+            init_cond_name = self.targets_path + 'press.' + str(self.configs.test_start_step - 1).zfill(5) + ".pfb"
             frame_np = read_pfb(get_absolute_path(init_cond_name)).astype(np.float32)
             frame_np = frame_np[:, :length_y, :length_x]
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
@@ -231,7 +226,6 @@ class Model(object):
 
             # 构造虚拟参数（用实际数据替换）
             nz, clm_nz = 11, 10
-            nx, ny = self.configs.img_width, self.configs.img_height
 
             size_2d  = (nx+2) * (ny+2) * 3
             size_3d  = (nx+2) * (ny+2) * (nz+2)
@@ -241,15 +235,10 @@ class Model(object):
             temp_arr_3d = np.ones(size_3d, dtype=np.float64)
             temp_arr_clm = np.ones(size_clm, dtype=np.float64)
 
-            targets_filename = self.configs.pf_runname + ".out."
-            targets_path = os.path.join(self.configs.targets_path, targets_filename)
-            alpha_filename = targets_path+'alpha.pfb'
-            n_filename = targets_path+'n.pfb'
-            theta_s_filename = targets_path+'ssat.pfb'
-            theta_r_filename = targets_path+'sres.pfb'
+            alpha_filename, n_filename = targets_path+'alpha.pfb', targets_path+'n.pfb'
+            theta_s_filename, theta_r_filename = targets_path+'ssat.pfb', targets_path+'sres.pfb'
 
-            mask_filename = targets_path+'mask.pfb'
-            porosity_filename = targets_path+'porosity.pfb'
+            mask_filename, porosity_filename = targets_path+'mask.pfb', targets_path+'porosity.pfb'
             pf_dz_mult_filename = targets_path+'dz_mult.pfb'
 
             alpha = read_pfb(alpha_filename)
@@ -270,14 +259,15 @@ class Model(object):
             pf_dz_mult = np.pad(pf_dz_mult, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0)
             pf_dz_mult = pf_dz_mult.flatten()
 
-            for t in range(self.configs.test_start_step, self.configs.test_end_step + 1):
+            for t in range(self.configs.test_start_step - 1, self.configs.test_end_step):
 
+                #this t is that in parflow, t+1 is that in colm and it is the real time
                 # read 8 forcings, cal saturation
                 hour = t % 24
                 time1 = str(t // 24 * 24 + 1).zfill(6) 
                 time2 = str(t // 24 * 24 + 24).zfill(6) 
 
-                general_path = os.path.join(self.configs.lsm_forcings_path,self.configs.lsm_forcings_name)
+                general_path = os.path.join(self.configs.lsm_forcings_path, self.configs.lsm_forcings_name)
                 sw_pf_filename = general_path +'.DSWR.' + time1 + '_to_' + time2 + '.pfb'
                 lw_pf_filename = general_path +'.DLWR.' + time1 + '_to_' + time2 + '.pfb'
                 prcp_pf_filename = general_path +'.APCP.' + time1 + '_to_' + time2 + '.pfb'
@@ -324,9 +314,9 @@ class Model(object):
                     topo.ctypes.data_as(POINTER(c_double)),         # topo
                     porosity.ctypes.data_as(POINTER(c_double)),     # porosity
                     pf_dz_mult.ctypes.data_as(POINTER(c_double)),   # pf_dz_mult
-                    t,                                  # istep_pf
-                    1.0,                                # dt
-                    t - 1.,                             # time ？？？
+                    t + 1,                                  # istep_pf
+                    1.0,                                    # dt
+                    t,                                      # time ？？？
                     self.configs.test_start_step - 1.,  # start_time_pf
                     961.72,                   # pdx
                     961.72,                   # pdy
@@ -343,7 +333,7 @@ class Model(object):
                     qatm_pf.ctypes.data_as(POINTER(c_double)),
                     *(temp_arr_2d.ctypes.data_as(POINTER(c_double)) for _ in range(18)),  # 所有 double* 参数
                     temp_arr_clm.ctypes.data_as(POINTER(c_double)),
-                    1, 0, 0,                                 # clm_dump_interval, clm_1d_out, clm_forc_veg
+                    1, 0, 0,                                 # clm_dump_interval####, clm_1d_out, clm_forc_veg
                     b"./output/", 9,                         # clm_output_dir, clm_output_dir_length
                     1,                                       # clm_bin_output_dir
                     1, 0, 1,                                 # write_CLM_binary, slope_accounting_CLM, beta_typepf
@@ -360,20 +350,19 @@ class Model(object):
                     temp_arr_clm.ctypes.data_as(POINTER(c_double)),   # qirr_inst_pf
                     temp_arr_2d.ctypes.data_as(POINTER(c_double)),    # irr_flag_pf
                     2,                                       # irr_thresholdtypepf
-                    10,                                      # soi_z
+                    10,                                      # soi_z ####
                     1, 0, 1, 1,                              # clm_next, clm_write_logs, clm_last_rst, clm_daily_rst
-                    10, 10                                   # pf_nlevsoi, pf_nlevlak
+                    10, 10                                   # pf_nlevsoi, pf_nlevlak ####
                 )
                 #reshape evaptrans to get the forcing to network
-                evap_trans = np.reshape(temp_arr_3d,(nz+2,ny+2,nx+2)).astype(np.float32)
-                evap_trans = torch.from_numpy(evap_trans[2:nz+1,1:length_y+1,
-                                                         1:length_x+1]).unsqueeze(0).unsqueeze(0)
-                evap_trans = (evap_trans-mean_a)/std_a
-                forcings_temp[:,:,:,:,:] = preprocess.reshape_patch(evap_trans, self.configs.patch_size)
-                forcings = forcings_temp.to(self.configs.device)
+                evap_trans = np.reshape(temp_arr_3d,(nz+2,ny+2,nx+2)).astype(np.float32)[1:nz+1,1:ny+1,1:nx+1]
+                evap_trans = torch.from_numpy(evap_trans).unsqueeze(0).unsqueeze(0)
+                evap_trans = ((evap_trans-mean_a)/std_a)[:, :, 1:nz, :length_y, :length_x]
+                forcings[:,:,:,:,:] = preprocess.reshape_patch(evap_trans, self.configs.patch_size)
+                forcings = forcings.to(self.configs.device)
 
-                net, net_temp, _, h_t, c_t, memory, delta_c_list, delta_m_list \
-                    = self.network(forcings[:,0], net, net_temp, h_t, c_t, memory, delta_c_list, delta_m_list)
+                net, net_temp, _, h_t, c_t, memory, delta_c_list, delta_m_list = \
+                self.network(forcings[:,0], net, net_temp, h_t, c_t, memory, delta_c_list, delta_m_list)
                 next_frames.append(net)
 
                 #reshape back net to get the init_cond for next step
@@ -424,14 +413,14 @@ class Model(object):
             POINTER(c_double), POINTER(c_double), POINTER(c_double), POINTER(c_double),  # qflx系列
             POINTER(c_double), POINTER(c_double),                                        
             POINTER(c_double), POINTER(c_double), POINTER(c_double),                     # swe_pf, t_g_pf, t_soil_pf                  
-            c_int, c_int, c_int,  # clm_dump_interval, clm_1d_out, clm_forc_veg
-            c_char_p,             # clm_output_dir
-            c_int,                # clm_output_dir_length
-            c_int,                # clm_bin_output_dir
-            c_int, c_int, c_int,  # write_CLM_binary, slope_accounting_CLM, beta_typepf
-            c_int,                # veg_water_stress_typepf
-            c_double, c_double, c_double,  # wilting_pointpf, field_capacitypf, res_satpf
-            c_int, c_int,                  # irr_typepf, irr_cyclepf
+            c_int, c_int, c_int,            # clm_dump_interval, clm_1d_out, clm_forc_veg
+            c_char_p,                       # clm_output_dir
+            c_int,                          # clm_output_dir_length
+            c_int,                          # clm_bin_output_dir
+            c_int, c_int, c_int,            # write_CLM_binary, slope_accounting_CLM, beta_typepf
+            c_int,                          # veg_water_stress_typepf
+            c_double, c_double, c_double,   # wilting_pointpf, field_capacitypf, res_satpf
+            c_int, c_int,                   # irr_typepf, irr_cyclepf
             c_double, c_double, c_double, c_double,  # irr_ratepf~irr_thresholdpf
             POINTER(c_double), POINTER(c_double),  # qirr_pf, qirr_inst_pf
             POINTER(c_double), # irr_flag_pf
