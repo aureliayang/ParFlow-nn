@@ -40,12 +40,13 @@ class RNN(nn.Module):
         # self.attention = nn.MultiheadAttention(embed_dim = self.embed_dim, num_heads=8,
         #                                        batch_first=True, dropout=0.1)
 
-        self.embed_dim = configs.img_channel*configs.patch_size*configs.patch_size
-        self.attention = nn.MultiheadAttention(embed_dim = self.embed_dim, num_heads=8,
-                                               batch_first=True, dropout=0.1)
+        self.pool = nn.AdaptiveAvgPool2d((1, 1))
+        self.embed_dim = self.num_hidden[-1]
+        self.attention = nn.MultiheadAttention(embed_dim=self.embed_dim, num_heads=8,
+                                            batch_first=True, dropout=0.1)
         self.scale = nn.Parameter(torch.zeros(1))
 
-    def forward(self, forcings, net, net_temp, h_t, c_t, memory, delta_c_list, delta_m_list):
+    def forward(self, forcings, net, net_temp, h_t_temp, h_t, c_t, memory, delta_c_list, delta_m_list):
 
         # batch, timesteps, channels, height, width = forcings.shape
         batch, channels, height, width = forcings.shape
@@ -73,13 +74,25 @@ class RNN(nn.Module):
         # attn_output = torch.reshape(attn_output,(batch, self.num_hidden[self.num_layers - 1], height, width))
         # net = self.scale * self.conv_last(attn_output) + net
 
-        output = self.conv_last(h_t[self.num_layers - 1])
-        output = torch.reshape(output,(batch,1,self.embed_dim))
+        # output = self.conv_last(h_t[self.num_layers - 1])
+        # output = torch.reshape(output,(batch,1,self.embed_dim))
+        # net_temp += [output]
+        # net_cat = torch.cat(net_temp,1)
+        # attn_output, attn_weights = self.attention(output, net_cat, net_cat)
+        # attn_output = torch.reshape(attn_output,(batch, self.configs.img_channel, height, width))
+        # net = self.scale * attn_output + net
+
+        pooled = self.pool(h_t[self.num_layers - 1])  # (B, C, 1, 1)
+        output = pooled.view(batch, 1, self.embed_dim)
         net_temp += [output]
-        net_cat = torch.cat(net_temp,1)
-        attn_output, attn_weights = self.attention(output, net_cat, net_cat)
-        attn_output = torch.reshape(attn_output,(batch, self.configs.img_channel, height, width))
-        net = self.scale * attn_output + net
+        net_cat = torch.cat(net_temp, dim=1)  # (B, T, C)
+        h_t_temp += [h_t[self.num_layers - 1]]
+        h_t_stack = torch.stack(h_t_temp, dim=1)  # (B, T, C, H, W)
+        attn_output, attn_weights = self.attention(output, net_cat, net_cat)  # (B, 1, C)
+        attn_weights = attn_weights.permute(0, 2, 1).unsqueeze(-1).unsqueeze(-1)  # (B, T, 1, 1, 1)
+        attn_applied = torch.sum(attn_weights * h_t_stack, dim=1)  # (B, C, H, W)
+        net = self.scale * self.conv_last(attn_applied) + net
+
 
             # # net = self.conv_last(h_t[self.num_layers - 1]) + net
             # next_frames.append(net)
@@ -89,4 +102,4 @@ class RNN(nn.Module):
         # loss = self.MSE_criterion(next_frames, targets) + self.beta * decouple_loss
 
         #return next_frames, loss
-        return net, net_temp, decouple_loss, h_t, c_t, memory, delta_c_list, delta_m_list
+        return net, net_temp, h_t_temp, decouple_loss, h_t, c_t, memory, delta_c_list, delta_m_list

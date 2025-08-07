@@ -80,10 +80,11 @@ class Model(object):
 
         net = init_cond[:, 0]
         net_temp = []
+        h_t_temp = []
 
         for t in range(timesteps):
-            net, net_temp, d_loss_step, h_t, c_t, memory, delta_c_list, delta_m_list = \
-            self.network(forcings[:, t], net, net_temp, h_t, c_t, memory, delta_c_list, delta_m_list)
+            net, net_temp, h_t_temp, d_loss_step, h_t, c_t, memory, delta_c_list, delta_m_list = \
+            self.network(forcings[:, t], net, net_temp, h_t_temp, h_t, c_t, memory, delta_c_list, delta_m_list)
             next_frames.append(net)
             decouple_loss += d_loss_step
         decouple_loss = torch.mean(torch.stack(decouple_loss, dim=0))
@@ -139,11 +140,12 @@ class Model(object):
 
             net = init_cond[:, 0]
             net_temp = []
+            h_t_temp = []
 
             for t in range(timesteps):
 
-                net, net_temp, _, h_t, c_t, memory, delta_c_list, delta_m_list = \
-                self.network(forcings[:, t], net, net_temp, h_t, c_t, memory, delta_c_list, delta_m_list)
+                net, net_temp, h_t_temp, _, h_t, c_t, memory, delta_c_list, delta_m_list = \
+                self.network(forcings[:, t], net, net_temp, h_t_temp, h_t, c_t, memory, delta_c_list, delta_m_list)
                 next_frames.append(net)
             next_frames = torch.stack(next_frames, dim=1)
 
@@ -188,7 +190,7 @@ class Model(object):
             targets_filename = self.configs.pf_runname + ".out."
             targets_path = os.path.join(self.configs.targets_path, targets_filename)
 
-            init_cond_name = self.targets_path + 'press.' + str(self.configs.test_start_step - 1).zfill(5) + ".pfb"
+            init_cond_name = targets_path + 'press.' + str(self.configs.test_start_step - 1).zfill(5) + ".pfb"
             frame_np = read_pfb(get_absolute_path(init_cond_name)).astype(np.float32)
             frame_np = frame_np[:, :length_y, :length_x]
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
@@ -217,6 +219,7 @@ class Model(object):
 
             net = init_cond[:, 0]
             net_temp = []
+            h_t_temp = []
 
             lib_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'libclm_lsm.so'))
             lib = ctypes.CDLL(lib_path)
@@ -361,8 +364,8 @@ class Model(object):
                 forcings[:,:,:,:,:] = preprocess.reshape_patch(evap_trans, self.configs.patch_size)
                 forcings = forcings.to(self.configs.device)
 
-                net, net_temp, _, h_t, c_t, memory, delta_c_list, delta_m_list = \
-                self.network(forcings[:,0], net, net_temp, h_t, c_t, memory, delta_c_list, delta_m_list)
+                net, net_temp, h_t_temp, _, h_t, c_t, memory, delta_c_list, delta_m_list = \
+                self.network(forcings[:,0], net, net_temp, h_t_temp, h_t, c_t, memory, delta_c_list, delta_m_list)
                 next_frames.append(net)
 
                 #reshape back net to get the init_cond for next step
