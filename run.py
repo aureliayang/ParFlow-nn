@@ -18,6 +18,7 @@ parser = argparse.ArgumentParser(description='CONCN surrogate model - ParFlow-nn
 parser.add_argument('--is_training', type=int, default=1)
 parser.add_argument('--is_test_lsm', type=int, default=0)
 parser.add_argument('--device', type=str, default='cpu:0')
+parser.add_argument('--attn_mode', type=str, default='none')
 
 # data
 parser.add_argument('--dataset_name', type=str, default='pfnn') # different preprocessing method
@@ -38,16 +39,10 @@ parser.add_argument('--img_height', type=int, default=64)
 parser.add_argument('--img_width', type=int, default=64)
 
 #paths
-# parser.add_argument('--init_cond_path', type=str, default='')
-# parser.add_argument('--init_cond_filename', type=str, default='')  #associated with training_start_step (minus -1)
-# parser.add_argument('--init_cond_test_path', type=str, default='')
-# parser.add_argument('--init_cond_test_filename', type=str, default='')  #associated with test_start_step (minus -1)
 parser.add_argument('--static_inputs_path', type=str, default='')
 parser.add_argument('--static_inputs_filename', type=str, default='') #combined and put in a new dir
 parser.add_argument('--forcings_path', type=str, default='')
 parser.add_argument('--targets_path', type=str, default='') # forcings and targets may be in the same dir
-# parser.add_argument('--target_norm_file', type=str, default='')
-# parser.add_argument('--force_norm_file', type=str, default='')
 parser.add_argument('--target_mean', type=str, default='50.6647919,2.18094949,1.19974567,0.5132593,\
                     0.11379735,-0.12730431,-0.27250824,-0.36000992,-0.41267873,-0.44452377,-0.46438877')
 parser.add_argument('--target_std', type=str, default='11.32939271,0.93890168,0.81459955,0.69557101,\
@@ -75,7 +70,7 @@ parser.add_argument('--decouple_beta', type=float, default=1)
 parser.add_argument('--grad_beta', type=float, default=0.5)
 parser.add_argument('--input_length_train', type=int, default=10)
 parser.add_argument('--input_length_test', type=int, default=10)
-# parser.add_argument('--lsm_timesteps', type=int, default=10)
+
 parser.add_argument('--ss_stride_train', type=int, default=1)
 parser.add_argument('--st_stride_train', type=int, default=1)
 parser.add_argument('--ss_stride_test', type=int, default=1)

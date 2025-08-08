@@ -9,6 +9,7 @@ python -u run.py \
     --model_name predrnn_pf \
     --save_dir checkpoints/pfnn_predrnn \
     --gen_frm_dir results/pfnn_predrnn \
+    --attn_mode pool \
     --training_start_step 4601 \
     --training_end_step 7000 \
     --test_start_step 7001 \
@@ -39,10 +40,6 @@ python -u run.py \
     --lsm_forcings_path /home/cy15/E5L \
     --lsm_forcings_name E5L \
     --pretrained_model /home/cy15/ParFlow-nn/checkpoints/pfnn_predrnn/model.ckpt-20000
-
-    # --init_cond_test_path /home/cy15/unname/pfb_shallow_2nd \
-    # --init_cond_test_filename unname_test.out.press.01200.pfb \
-    # necessary for lsm test
 
 
     # --reverse_input 1 \

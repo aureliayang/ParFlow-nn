@@ -36,15 +36,24 @@ class RNN(nn.Module):
         
         self.cell_encoder = nn.Conv2d(configs.static_channel, sum(num_hidden), kernel_size=1, bias=True)
 
-        # self.embed_dim = num_hidden[num_layers - 1]*configs.patch_size*configs.patch_size
-        # self.attention = nn.MultiheadAttention(embed_dim = self.embed_dim, num_heads=8,
-        #                                        batch_first=True, dropout=0.1)
+        if configs.attn_mode == "pool":
+            self.pool = nn.AdaptiveAvgPool2d((1, 1))
 
-        self.pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.embed_dim = self.num_hidden[-1]
-        self.attention = nn.MultiheadAttention(embed_dim=self.embed_dim, num_heads=8,
-                                            batch_first=True, dropout=0.1)
-        self.scale = nn.Parameter(torch.zeros(1))
+        elif configs.attn_mode == "xyconv":
+            C = self.num_hidden[-1]
+            self.xy_reduce = nn.Sequential(
+                # nn.Conv2d(C, C, kernel_size=1, bias=False),  # 可选：通道混合，想纯深度卷积可去掉
+                nn.Conv2d(C, C, kernel_size=(configs.patch_size, 1), stride=(configs.patch_size, 1),
+                        groups=C, bias=False),             # 压 Y -> 1
+                nn.Conv2d(C, C, kernel_size=(1, configs.patch_size), stride=(1, configs.patch_size),
+                        groups=C, bias=False)              # 压 X -> 1
+            )
+
+        if configs.attn_mode != "none":
+            self.embed_dim = self.num_hidden[-1]
+            self.attention = nn.MultiheadAttention(embed_dim=self.embed_dim, num_heads=8,
+                                                batch_first=True, dropout=0.1)
+            self.scale = nn.Parameter(torch.zeros(1))
 
     def forward(self, forcings, net, net_temp, h_t_temp, h_t, c_t, memory, delta_c_list, delta_m_list):
 
@@ -67,39 +76,27 @@ class RNN(nn.Module):
             decouple_loss.append(torch.mean(torch.abs(
                          torch.cosine_similarity(delta_c_list[i], delta_m_list[i], dim=2))))
  
-        # output = torch.reshape(h_t[self.num_layers - 1],(batch,1,self.embed_dim))
-        # net_temp += [output]
-        # net_cat = torch.cat(net_temp,1)
-        # attn_output, attn_weights = self.attention(output, net_cat, net_cat)
-        # attn_output = torch.reshape(attn_output,(batch, self.num_hidden[self.num_layers - 1], height, width))
-        # net = self.scale * self.conv_last(attn_output) + net
+        if self.configs.attn_mode == "pool":
+            pooled = self.pool(h_t[self.num_layers - 1])  # (B, C, 1, 1)
 
-        # output = self.conv_last(h_t[self.num_layers - 1])
-        # output = torch.reshape(output,(batch,1,self.embed_dim))
-        # net_temp += [output]
-        # net_cat = torch.cat(net_temp,1)
-        # attn_output, attn_weights = self.attention(output, net_cat, net_cat)
-        # attn_output = torch.reshape(attn_output,(batch, self.configs.img_channel, height, width))
-        # net = self.scale * attn_output + net
+        elif self.configs.attn_mode == "xyconv":
+            pooled = self.xy_reduce(h_t[self.num_layers - 1])  # (B, C, 1, 1)
 
-        pooled = self.pool(h_t[self.num_layers - 1])  # (B, C, 1, 1)
-        output = pooled.view(batch, 1, self.embed_dim)
+        elif self.configs.attn_mode == "none":
+            net = self.conv_last(h_t[self.num_layers - 1]) + net
+            return net, net_temp, h_t_temp, decouple_loss, h_t, c_t, memory, delta_c_list, delta_m_list
+
+        output = pooled.view(batch, 1, self.embed_dim)    # (B, 1, C)
         net_temp += [output]
-        net_cat = torch.cat(net_temp, dim=1)  # (B, T, C)
-        h_t_temp += [h_t[self.num_layers - 1]]
-        h_t_stack = torch.stack(h_t_temp, dim=1)  # (B, T, C, H, W)
+        net_cat = torch.cat(net_temp, dim=1)              # (B, T, C)
+
+        h_t_temp += [h_t[self.num_layers - 1]]            # (B, C, H, W)
+        h_t_stack = torch.stack(h_t_temp, dim=1)          # (B, T, C, H, W)
+
         attn_output, attn_weights = self.attention(output, net_cat, net_cat)  # (B, 1, C)
         attn_weights = attn_weights.permute(0, 2, 1).unsqueeze(-1).unsqueeze(-1)  # (B, T, 1, 1, 1)
+
         attn_applied = torch.sum(attn_weights * h_t_stack, dim=1)  # (B, C, H, W)
         net = self.scale * self.conv_last(attn_applied) + net
 
-
-            # # net = self.conv_last(h_t[self.num_layers - 1]) + net
-            # next_frames.append(net)
-
-        # decouple_loss = torch.mean(torch.stack(decouple_loss, dim=0))
-        # next_frames = torch.stack(next_frames, dim=1)
-        # loss = self.MSE_criterion(next_frames, targets) + self.beta * decouple_loss
-
-        #return next_frames, loss
         return net, net_temp, h_t_temp, decouple_loss, h_t, c_t, memory, delta_c_list, delta_m_list
