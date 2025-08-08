@@ -50,10 +50,10 @@ def test(model, test_input_handle, configs, itr):
         num_patch_y = configs.img_height // configs.patch_size 
         num_patch_x = configs.img_width // configs.patch_size
 
-        target_mean_list = [float(x) for x in configs.target_mean.split(',')]
-        target_std_list = [float(x) for x in configs.target_std.split(',')]
-        mean_p = torch.tensor(target_mean_list).view(1, 1, -1, 1, 1)
-        std_p = torch.tensor(target_std_list).view(1, 1, -1, 1, 1)
+        # target_mean_list = [float(x) for x in configs.target_mean.split(',')]
+        # target_std_list = [float(x) for x in configs.target_std.split(',')]
+        mean_p = torch.tensor(configs.target_mean).view(1, 1, -1, 1, 1)
+        std_p = torch.tensor(configs.target_std).view(1, 1, -1, 1, 1)
 
         img_gen = preprocess.reshape_patch_back_time(img_gen, num_patch_x*num_patch_y)
         img_gen = preprocess.reshape_patch_back(img_gen, num_patch_x, num_patch_y)

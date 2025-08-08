@@ -84,10 +84,10 @@ class DataProcess:
         targets_filename = configs.pf_runname + ".out.press."
         self.targets_path = os.path.join(configs.targets_path, targets_filename) 
 
-        self.target_mean_str = configs.target_mean
-        self.target_std_str = configs.target_std
-        self.force_mean_str = configs.force_mean
-        self.force_std_str = configs.force_std
+        self.target_mean_list = configs.target_mean
+        self.target_std_list = configs.target_std
+        self.force_mean_list = configs.force_mean
+        self.force_std_list = configs.force_std
         
         # the RNN length
         self.input_length_train = configs.input_length_train
@@ -150,22 +150,22 @@ class DataProcess:
         frame_np = read_pfb(get_absolute_path(static_inputs_name)).astype(np.float32)
         frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
         mean = frame_im.mean(dim=(3,4), keepdim=True)
-        std = frame_im.std(dim=(3,4), keepdim=True)
+        std = frame_im.std(dim=(3,4), keepdim=True)+1e-8
         frame_im = (frame_im-mean)/std
         for idx_s, (y, x) in enumerate(coords_space):
             static_inputs_temp[idx_s:idx_s+1, :, :, :, :] = \
                 frame_im[:, :, :, y:y+self.patch_size, x:x+self.patch_size]
 
         # 转成浮点列表
-        target_mean_list = [float(x) for x in self.target_mean_str.split(',')]
-        target_std_list = [float(x) for x in self.target_std_str.split(',')]
-        mean_p = torch.tensor(target_mean_list).view(1, 1, -1, 1, 1)
-        std_p = torch.tensor(target_std_list).view(1, 1, -1, 1, 1)
+        # target_mean_list = [float(x) for x in self.target_mean_str.split(',')]
+        # target_std_list = [float(x) for x in self.target_std_str.split(',')]
+        mean_p = torch.tensor(self.target_mean_list).view(1, 1, -1, 1, 1)
+        std_p = torch.tensor(self.target_std_list).view(1, 1, -1, 1, 1)
 
-        force_mean_list = [float(x) for x in self.force_mean_str.split(',')]
-        force_std_list = [float(x) for x in self.force_std_str.split(',')]
-        mean_a = torch.tensor(force_mean_list).view(1, 1, -1, 1, 1)
-        std_a = torch.tensor(force_std_list).view(1, 1, -1, 1, 1)
+        # force_mean_list = [float(x) for x in self.force_mean_str.split(',')]
+        # force_std_list = [float(x) for x in self.force_std_str.split(',')]
+        mean_a = torch.tensor(self.force_mean_list).view(1, 1, -1, 1, 1)
+        std_a = torch.tensor(self.force_std_list).view(1, 1, -1, 1, 1)
 
         for idx_t, start_t in enumerate(coords_time):
             for i in range(input_length):

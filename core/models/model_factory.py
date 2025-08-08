@@ -172,20 +172,20 @@ class Model(object):
             frame_np = frame_np[:, :length_y, :length_x] # drop off
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
             mean = frame_im.mean(dim=(3,4), keepdim=True)
-            std = frame_im.std(dim=(3,4), keepdim=True)
+            std = frame_im.std(dim=(3,4), keepdim=True)+1e-8
             frame_im = (frame_im-mean)/std
             static_inputs[:,:,:,:,:] = preprocess.reshape_patch(frame_im, self.configs.patch_size)
             static_inputs = static_inputs.to(self.configs.device)
 
-            target_mean_list = [float(x) for x in self.configs.target_mean.split(',')]
-            target_std_list = [float(x) for x in self.configs.target_std.split(',')]
-            mean_p = torch.tensor(target_mean_list).view(1, 1, -1, 1, 1)
-            std_p = torch.tensor(target_std_list).view(1, 1, -1, 1, 1)
+            # target_mean_list = [float(x) for x in self.configs.target_mean.split(',')]
+            # target_std_list = [float(x) for x in self.configs.target_std.split(',')]
+            mean_p = torch.tensor(self.configs.target_mean).view(1, 1, -1, 1, 1)
+            std_p = torch.tensor(self.configs.target_std).view(1, 1, -1, 1, 1)
 
-            force_mean_list = [float(x) for x in self.configs.force_mean.split(',')]
-            force_std_list = [float(x) for x in self.configs.force_std.split(',')]
-            mean_a = torch.tensor(force_mean_list).view(1, 1, -1, 1, 1)
-            std_a = torch.tensor(force_std_list).view(1, 1, -1, 1, 1)
+            # force_mean_list = [float(x) for x in self.configs.force_mean.split(',')]
+            # force_std_list = [float(x) for x in self.configs.force_std.split(',')]
+            mean_a = torch.tensor(self.configs.force_mean).view(1, 1, -1, 1, 1)
+            std_a = torch.tensor(self.configs.force_std).view(1, 1, -1, 1, 1)
 
             targets_filename = self.configs.pf_runname + ".out."
             targets_path = os.path.join(self.configs.targets_path, targets_filename)

@@ -3,13 +3,15 @@ __author__ = 'chen yang'
 import os
 import shutil
 import argparse
-# import numpy as np
+import numpy as np
+import random
 # import math
 from core.data_provider import datasets_factory
 from core.models.model_factory import Model
 # from core.utils import preprocess
 import core.trainer as trainer
 import torch
+import yaml
 
 # -----------------------------------------------------------------------------
 parser = argparse.ArgumentParser(description='CONCN surrogate model - ParFlow-nn')
@@ -43,14 +45,11 @@ parser.add_argument('--static_inputs_path', type=str, default='')
 parser.add_argument('--static_inputs_filename', type=str, default='') #combined and put in a new dir
 parser.add_argument('--forcings_path', type=str, default='')
 parser.add_argument('--targets_path', type=str, default='') # forcings and targets may be in the same dir
-parser.add_argument('--target_mean', type=str, default='50.6647919,2.18094949,1.19974567,0.5132593,\
-                    0.11379735,-0.12730431,-0.27250824,-0.36000992,-0.41267873,-0.44452377,-0.46438877')
-parser.add_argument('--target_std', type=str, default='11.32939271,0.93890168,0.81459955,0.69557101,\
-                    0.59929806,0.54758706,0.52029829,0.50644763,0.49912652,0.49520303,0.49344641')
-parser.add_argument('--force_mean', type=str, default='0.00000000e+00,-1.65678623e-06,-2.55343334e-06,-9.06575188e-06,\
-                    -2.91817793e-05,-7.71748930e-05,-1.55229783e-04,-2.26101332e-04,-2.38931359e-04,-1.84304437e-04,9.87172230e-03')
-parser.add_argument('--force_std', type=str, default='0.00000000e+00,2.97740304e-06,4.71635086e-06,1.69609972e-05,\
-                    5.46345691e-05,1.41404926e-04,2.77901646e-04,4.11366363e-04,4.57953708e-04,3.71477025e-04,3.55238828e-02')
+parser.add_argument("--norm_file", type=str, default="normalize.yaml")
+parser.add_argument('--target_mean', type=list, default=[])
+parser.add_argument('--target_std', type=list, default=[])
+parser.add_argument('--force_mean', type=list, default=[])
+parser.add_argument('--force_std', type=list, default=[])
 
 parser.add_argument('--lsm_forcings_path', type=str, default='')
 parser.add_argument('--lsm_forcings_name', type=str, default='')
@@ -83,14 +82,15 @@ parser.add_argument('--max_iterations', type=int, default=80000) # how many batc
 parser.add_argument('--display_interval', type=int, default=100) # print loss
 parser.add_argument('--test_interval', type=int, default=5000) # run test in training
 parser.add_argument('--snapshot_interval', type=int, default=5000) # save model
-# parser.add_argument('--n_gpu', type=int, default=1)
-# parser.add_argument('--reverse_input', type=int, default=1)
-
-# # visualization of memory decoupling
-# parser.add_argument('--visual', type=int, default=0)
-# parser.add_argument('--visual_path', type=str, default='./decoupling_visual')
 
 args = parser.parse_args()
+with open(args.norm_file, "r", encoding="utf-8") as f:
+    y = yaml.safe_load(f) or {}
+
+if "target_mean" in y: args.target_mean = y["target_mean"]
+if "target_std"  in y: args.target_std  = y["target_std"]
+if "force_mean" in y: args.force_mean = y["force_mean"]
+if "force_std"  in y: args.force_std  = y["force_std"]
 print(args)
 
 def train_wrapper(model):
@@ -125,6 +125,22 @@ def test_lsm_wrapper(model):
     model.load(args.pretrained_model)
     # test_input_handle = datasets_factory.data_provider(args)
     trainer.test_lsm(model, args, 'test_result')
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+set_seed(42)
+
+print("Random:", random.random())
+print("Numpy:", np.random.rand(5))
+print("Torch CPU:", torch.rand(3))
+print("Torch CUDA:", torch.rand(3).cuda())
 
 if os.path.exists(args.save_dir):
     if not args.pretrained_model:
