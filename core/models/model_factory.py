@@ -57,6 +57,7 @@ class Model(object):
         self.network.load_state_dict(stats['net_param'])
 
     def train(self, forcings, init_cond, static_inputs, targets):
+        self.network.train()
         self.optimizer.zero_grad()
 
         batch, timesteps, channels, height, width = forcings.shape
@@ -119,6 +120,7 @@ class Model(object):
         return total_loss.item(), mse_loss.item(), grad_component.item(), decouple_component.item()
 
     def test(self, forcings, init_cond, static_inputs):
+        self.network.eval()
         with torch.no_grad():
             batch, timesteps, channels, height, width = forcings.shape
 
@@ -152,6 +154,8 @@ class Model(object):
         return next_frames
 
     def test_lsm(self):
+
+        self.network.eval()
 
         with torch.no_grad():
 

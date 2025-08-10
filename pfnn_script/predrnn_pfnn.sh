@@ -33,6 +33,7 @@ python -u run.py \
     --act_channel 10 \
     --img_channel 11 \
     --lr 0.0003 \
+    --grad_beta 0 \
     --batch_size 16 \
     --max_iterations 1000 \
     --display_interval 100 \
