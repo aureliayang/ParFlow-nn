@@ -156,8 +156,8 @@ os.makedirs(args.gen_frm_dir)
 print('Initializing models')
 
 
-torch.cuda.empty_cache()
-torch.cuda.reset_peak_memory_stats()
+#torch.cuda.empty_cache()
+#torch.cuda.reset_peak_memory_stats()
 
 model = Model(args)
 

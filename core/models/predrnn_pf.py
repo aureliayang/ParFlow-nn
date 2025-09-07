@@ -17,7 +17,7 @@ class RNN(nn.Module):
         self.beta = configs.decouple_beta
         
         cell_list = []
-        self.MSE_criterion = nn.MSELoss().cuda()
+        self.MSE_criterion = nn.MSELoss()
 
         for i in range(num_layers):
             in_channel = configs.img_channel if i == 0 else num_hidden[i - 1]
