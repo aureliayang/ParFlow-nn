@@ -70,7 +70,7 @@ class Model(object):
         decouple_loss = []
 
         for i in range(self.num_layers):
-            zeros = torch.zeros([batch, self.num_hidden[i], height, width]).cuda()
+            zeros = torch.zeros([batch, self.num_hidden[i], height, width]).to(self.configs.device)
             h_t.append(zeros)
             c_t.append(zeros)
             delta_c_list.append(zeros)
@@ -131,7 +131,7 @@ class Model(object):
             delta_m_list = []
 
             for i in range(self.num_layers):
-                zeros = torch.zeros([batch, self.num_hidden[i], height, width]).cuda()
+                zeros = torch.zeros([batch, self.num_hidden[i], height, width]).to(self.configs.device)
                 h_t.append(zeros)
                 c_t.append(zeros)
                 delta_c_list.append(zeros)
@@ -163,6 +163,8 @@ class Model(object):
             num_patch_y, num_patch_x = ny // self.configs.patch_size, nx // self.configs.patch_size
             length_y, length_x = num_patch_y*self.configs.patch_size, num_patch_x*self.configs.patch_size
             num_patch = num_patch_x*num_patch_y
+            delta_height = ny - length_y
+            delta_width  = nx - length_x
 
             static_inputs = torch.empty((num_patch, 1, self.configs.static_channel, self.configs.patch_size,
                                          self.configs.patch_size), dtype=torch.float)  # np.float32
@@ -181,13 +183,9 @@ class Model(object):
             static_inputs[:,:,:,:,:] = preprocess.reshape_patch(frame_im, self.configs.patch_size)
             static_inputs = static_inputs.to(self.configs.device)
 
-            # target_mean_list = [float(x) for x in self.configs.target_mean.split(',')]
-            # target_std_list = [float(x) for x in self.configs.target_std.split(',')]
             mean_p = torch.tensor(self.configs.target_mean).view(1, 1, -1, 1, 1)
             std_p = torch.tensor(self.configs.target_std).view(1, 1, -1, 1, 1)
 
-            # force_mean_list = [float(x) for x in self.configs.force_mean.split(',')]
-            # force_std_list = [float(x) for x in self.configs.force_std.split(',')]
             mean_a = torch.tensor(self.configs.force_mean).view(1, 1, -1, 1, 1)
             std_a = torch.tensor(self.configs.force_std).view(1, 1, -1, 1, 1)
 
@@ -212,7 +210,7 @@ class Model(object):
             delta_m_list = []
 
             for i in range(self.num_layers):
-                zeros = torch.zeros([batch, self.num_hidden[i], height, width]).cuda()
+                zeros = torch.zeros([batch, self.num_hidden[i], height, width]).to(self.configs.device)
                 h_t.append(zeros)
                 c_t.append(zeros)
                 delta_c_list.append(zeros)
@@ -255,7 +253,7 @@ class Model(object):
 
             press_temp = read_pfb(init_cond_name)
             topo = read_pfb(mask_filename)
-            topo[:,length_y:,length_x:] = -9999.
+            #topo[:,length_y:,length_x:] = -9999.
             porosity = read_pfb(porosity_filename)
             pf_dz_mult = read_pfb(pf_dz_mult_filename)
 
@@ -376,7 +374,8 @@ class Model(object):
                 press_ = preprocess.reshape_patch_back(net.unsqueeze(1), num_patch_x, num_patch_y)
                 press_ = torch.squeeze((press_.detach().cpu())*std_p+mean_p).numpy().astype(np.float64)
                 # padding
-                press_temp[:,:length_y,:length_x] = press_
+                # press_temp[:,:length_y,:length_x] = press_
+                press_temp = np.pad(press_, pad_width=((0, 0), (0,delta_height), (0,delta_width)), mode='reflect')
 
             next_frames = torch.stack(next_frames, dim=1)
         # return next_frames.detach().cpu().numpy()
