@@ -159,6 +159,9 @@ class Model(object):
 
         with torch.no_grad():
 
+            res_path = os.path.join(self.configs.gen_frm_dir, 'lsm_result')
+            os.mkdir(res_path)
+
             nx, ny = self.configs.img_width, self.configs.img_height
             num_patch_y, num_patch_x = ny // self.configs.patch_size, nx // self.configs.patch_size
             length_y, length_x = num_patch_y*self.configs.patch_size, num_patch_x*self.configs.patch_size
@@ -237,6 +240,8 @@ class Model(object):
             size_clm = (nx+2) * (ny+2) * (clm_nz+2)
 
             temp_arr_2d = np.ones(size_2d, dtype=np.float64)
+            temp_arr_lh = np.ones(size_2d, dtype=np.float64)
+            temp_arr_sh = np.ones(size_2d, dtype=np.float64)
             temp_arr_3d = np.ones(size_3d, dtype=np.float64)
             temp_arr_clm = np.ones(size_clm, dtype=np.float64)
 
@@ -336,7 +341,11 @@ class Model(object):
                     v_pf.ctypes.data_as(POINTER(c_double)),
                     patm_pf.ctypes.data_as(POINTER(c_double)),
                     qatm_pf.ctypes.data_as(POINTER(c_double)),
-                    *(temp_arr_2d.ctypes.data_as(POINTER(c_double)) for _ in range(18)),  # 所有 double* 参数
+                    *(temp_arr_2d.ctypes.data_as(POINTER(c_double)) for _ in range(6)),  # 所有 double* 参数
+                    temp_arr_lh.ctypes.data_as(POINTER(c_double)),
+                    temp_arr_2d.ctypes.data_as(POINTER(c_double)),
+                    temp_arr_sh.ctypes.data_as(POINTER(c_double)),
+                    *(temp_arr_2d.ctypes.data_as(POINTER(c_double)) for _ in range(9)),
                     temp_arr_clm.ctypes.data_as(POINTER(c_double)),
                     1, 0, 0,                                 # clm_dump_interval####, clm_1d_out, clm_forc_veg
                     b"./output/", 9,                         # clm_output_dir, clm_output_dir_length
@@ -365,6 +374,23 @@ class Model(object):
                 evap_trans = ((evap_trans-mean_a)/std_a)[:, :, 1:nz, :length_y, :length_x]
                 forcings[:,:,:,:,:] = preprocess.reshape_patch(evap_trans, self.configs.patch_size)
                 forcings = forcings.to(self.configs.device)
+
+                heat_lh = np.reshape(temp_arr_lh,(3,ny+2,nx+2))[1,1:length_y+1,1:length_x+1]
+                heat_sh = np.reshape(temp_arr_sh,(3,ny+2,nx+2))[1,1:length_y+1,1:length_x+1]
+                temp_gt = np.reshape(temp_arr_2d,(3,ny+2,nx+2))[1,1:length_y+1,1:length_x+1]
+                trans = np.reshape(temp_arr_3d,(nz+2,ny+2,nx+2))[1:nz+1,1:ny+1,1:nx+1]
+
+                lsm_name = os.path.join(res_path, 'heat_lh.' + str(t+1).zfill(5) + '.pfb')
+                write_pfb(lsm_name, heat_lh, dist=False)
+
+                lsm_name = os.path.join(res_path, 'heat_sh.' + str(t+1).zfill(5) + '.pfb')
+                write_pfb(lsm_name, heat_sh, dist=False)
+
+                lsm_name = os.path.join(res_path, 'temp_gt.' + str(t+1).zfill(5) + '.pfb')
+                write_pfb(lsm_name, temp_gt, dist=False)
+
+                lsm_name = os.path.join(res_path, 'evap.' + str(t+1).zfill(5) + '.pfb')
+                write_pfb(lsm_name, trans, dist=False)
 
                 net, net_temp, h_t_temp, _, h_t, c_t, memory, delta_c_list, delta_m_list = \
                 self.network(forcings[:,0], net, net_temp, h_t_temp, h_t, c_t, memory, delta_c_list, delta_m_list)
