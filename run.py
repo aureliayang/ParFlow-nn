@@ -12,6 +12,7 @@ from core.models.model_factory import Model
 import core.trainer as trainer
 import torch
 import yaml
+import datetime
 
 # -----------------------------------------------------------------------------
 parser = argparse.ArgumentParser(description='CONCN surrogate model - ParFlow-nn')
@@ -61,7 +62,7 @@ parser.add_argument('--act_channel', type=int, default=4)
 parser.add_argument('--img_channel', type=int, default=10)
 
 #CNN
-parser.add_argument('--num_hidden', type=str, default='40,40')
+parser.add_argument('--num_hidden', type=str, default='16,16')
 parser.add_argument('--filter_size', type=int, default=5)
 parser.add_argument('--stride', type=int, default=1)
 parser.add_argument('--patch_size', type=int, default=16)
@@ -82,6 +83,8 @@ parser.add_argument('--max_iterations', type=int, default=80000) # how many batc
 parser.add_argument('--display_interval', type=int, default=100) # print loss
 parser.add_argument('--test_interval', type=int, default=5000) # run test in training
 parser.add_argument('--snapshot_interval', type=int, default=5000) # save model
+
+print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
 args = parser.parse_args()
 with open(args.norm_file, "r", encoding="utf-8") as f:
@@ -135,7 +138,7 @@ def set_seed(seed):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-set_seed(42)
+set_seed(420)
 
 print("Random:", random.random())
 print("Numpy:", np.random.rand(5))
@@ -161,6 +164,9 @@ print('Initializing models')
 
 model = Model(args)
 
+num_params = sum(p.numel() for p in model.network.parameters())
+print(f"Total parameters: {num_params:,}")
+
 if args.is_test_lsm:
     args.is_training = 0
     test_lsm_wrapper(model)
@@ -168,3 +174,5 @@ elif args.is_training:
     train_wrapper(model)
 else:
     test_wrapper(model)
+
+print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))

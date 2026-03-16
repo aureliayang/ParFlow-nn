@@ -9,12 +9,12 @@ python -u run.py \
     --model_name predrnn_pf \
     --save_dir checkpoints/pfnn_predrnn \
     --gen_frm_dir results/pfnn_predrnn \
-    --norm_file /home/cy15/clm_call/normalize_481_7000.yaml \
+    --norm_file /data/aurelia-data/workspace/clm_call/normalize_1_6000.yaml \
     --attn_mode none \
-    --training_start_step 601 \
-    --training_end_step 3000 \
-    --test_start_step 1 \
-    --test_end_step 120 \
+    --training_start_step 1 \
+    --training_end_step 6000 \
+    --test_start_step 6961 \
+    --test_end_step 8760 \
     --img_height 146 \
     --img_width 252 \
     --patch_size 16 \
@@ -24,22 +24,22 @@ python -u run.py \
     --st_stride_train 120 \
     --ss_stride_test 16 \
     --st_stride_test 120 \
-    --static_inputs_path /home/cy15/clm_call \
+    --static_inputs_path /data/aurelia-data/workspace/clm_call \
     --static_inputs_filename static_inputs_combined.pfb \
-    --forcings_path /home/cy15/unname/pfb_shallow_2nd \
-    --targets_path /home/cy15/unname/pfb_shallow_2nd \
+    --forcings_path /data/aurelia-data/workspace/beijiang/outputs \
+    --targets_path /data/aurelia-data/workspace/beijiang/outputs \
     --init_cond_channel 11 \
     --static_channel 40 \
     --act_channel 10 \
     --img_channel 11 \
     --lr 0.0003 \
-    --grad_beta 0.5 \
+    --grad_beta 0.1 \
     --batch_size 16 \
-    --max_iterations 50000 \
+    --max_iterations 80000 \
     --display_interval 100 \
     --test_interval 1000 \
     --snapshot_interval 5000 \
-    # --pretrained_model /home/cy15/ParFlow-nn/checkpoints_1001_3400/pfnn_predrnn/model.ckpt-50000 \
-    # --lsm_forcings_path /home/cy15/E5L \
+    # --pretrained_model /data/aurelia-data/workspace/ParFlow-nn/checkpoints_none/pfnn_predrnn/model.ckpt-80000 \
+    # --lsm_forcings_path /data/aurelia-data/workspace/E5L \
     # --lsm_forcings_name E5L 
    
