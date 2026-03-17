@@ -20,7 +20,7 @@ parser = argparse.ArgumentParser(description='CONCN surrogate model - ParFlow-nn
 # training/test
 parser.add_argument('--is_training', type=int, default=1)
 parser.add_argument('--is_test_lsm', type=int, default=0)
-parser.add_argument('--device', type=str, default='cpu:0')
+parser.add_argument('--device', type=str, default='cpu')
 parser.add_argument('--attn_mode', type=str, default='none')
 
 # data
@@ -47,10 +47,10 @@ parser.add_argument('--static_inputs_filename', type=str, default='') #combined 
 parser.add_argument('--forcings_path', type=str, default='')
 parser.add_argument('--targets_path', type=str, default='') # forcings and targets may be in the same dir
 parser.add_argument("--norm_file", type=str, default="normalize.yaml")
-parser.add_argument('--target_mean', type=list, default=[])
-parser.add_argument('--target_std', type=list, default=[])
-parser.add_argument('--force_mean', type=list, default=[])
-parser.add_argument('--force_std', type=list, default=[])
+parser.add_argument('--target_mean', default=[])
+parser.add_argument('--target_std', default=[])
+parser.add_argument('--force_mean', default=[])
+parser.add_argument('--force_std', default=[])
 
 parser.add_argument('--lsm_forcings_path', type=str, default='')
 parser.add_argument('--lsm_forcings_name', type=str, default='')
@@ -84,6 +84,13 @@ parser.add_argument('--display_interval', type=int, default=100) # print loss
 parser.add_argument('--test_interval', type=int, default=5000) # run test in training
 parser.add_argument('--snapshot_interval', type=int, default=5000) # save model
 
+parser.add_argument('--dx', type=float, default=961.72)
+parser.add_argument('--dy', type=float, default=961.72)
+parser.add_argument('--storage_beta', type=float, default=0)
+parser.add_argument('--dz', type=float, nargs='+', default=[
+    100.0, 1.1370, 0.9133, 0.5539, 0.3360, 0.2038,
+    0.1236, 0.0749, 0.0455, 0.0276, 0.0175])
+
 print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
 args = parser.parse_args()
@@ -94,7 +101,11 @@ if "target_mean" in y: args.target_mean = y["target_mean"]
 if "target_std"  in y: args.target_std  = y["target_std"]
 if "force_mean" in y: args.force_mean = y["force_mean"]
 if "force_std"  in y: args.force_std  = y["force_std"]
-print(args)
+# print(args)
+print("\n===== Config =====")
+for k, v in sorted(vars(args).items()):
+    print(f"{k:25s}: {v}")
+print("==================\n")
 
 def train_wrapper(model):
     if args.pretrained_model:
@@ -106,9 +117,12 @@ def train_wrapper(model):
         if train_input_handle.no_batch_left():
             train_input_handle.begin(do_shuffle=True)
 
-        forcings, init_cond, static_inputs, targets = train_input_handle.get_batch()
+        forcings, init_cond, static_inputs, targets, alpha, n, \
+        theta_r, theta_s, porosity, specific_storage, mask \
+              = train_input_handle.get_batch()
 
-        trainer.train(model, forcings, init_cond, static_inputs, targets, args, itr)
+        trainer.train(model, forcings, init_cond, static_inputs, targets, alpha, n, 
+                      theta_r, theta_s, porosity, specific_storage, mask, args, itr)
 
         if itr % args.snapshot_interval == 0:
             model.save(itr)
@@ -126,7 +140,6 @@ def test_wrapper(model):
 
 def test_lsm_wrapper(model):
     model.load(args.pretrained_model)
-    # test_input_handle = datasets_factory.data_provider(args)
     trainer.test_lsm(model, args, 'test_result')
 
 def set_seed(seed):
@@ -157,10 +170,6 @@ if os.path.exists(args.gen_frm_dir):
 os.makedirs(args.gen_frm_dir)
 
 print('Initializing models')
-
-
-#torch.cuda.empty_cache()
-#torch.cuda.reset_peak_memory_stats()
 
 model = Model(args)
 

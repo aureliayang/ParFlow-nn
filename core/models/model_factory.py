@@ -1,17 +1,15 @@
 __author__ = 'chen yang'
 
 import os
-import torch
-from torch.optim import AdamW
-from torch.optim import lr_scheduler
-from core.models import predrnn_pf
 import ctypes
-from ctypes import c_double, c_int, c_char_p, POINTER, byref, CDLL
-from parflow.tools.fs import get_absolute_path
-from parflow.tools.io import write_pfb, read_pfb
+import torch
 import numpy as np
+from torch.optim import AdamW
+from ctypes import c_double, c_int, c_char_p, POINTER
+from core.models import predrnn_pf
+from parflow.tools.io import write_pfb, read_pfb
 from core.utils import preprocess
-# from core.models import predrnn, predrnn_v2, action_cond_predrnn, action_cond_predrnn_v2
+from parflow.tools.fs import get_absolute_path
 
 class Model(object):
     def __init__(self, configs):
@@ -20,61 +18,110 @@ class Model(object):
         self.num_layers = len(self.num_hidden)
         networks_map = {
             'predrnn_pf': predrnn_pf.RNN,
-            # 'predrnn': predrnn.RNN,
-            # 'predrnn_v2': predrnn_v2.RNN,
-            # 'action_cond_predrnn': action_cond_predrnn.RNN,
-            # 'action_cond_predrnn_v2': action_cond_predrnn_v2.RNN,
         }
 
         if configs.model_name in networks_map:
             Network = networks_map[configs.model_name]
             self.network = Network(self.num_layers, self.num_hidden, configs).to(configs.device)
         else:
-            raise ValueError('Name of network unknown %s' % configs.model_name)
+            raise ValueError(f'Name of network unknown {configs.model_name}')
 
-        self.optimizer = AdamW(self.network.parameters(), lr=configs.lr, betas=[0.8, 0.95])
-        # self.scheduler = lr_scheduler.StepLR(self.optimizer, step_size=1000, gamma=0.5)
-        # self.scheduler = lr_scheduler.OneCycleLR(
-        #     self.optimizer,
-        #     max_lr=configs.lr*5,                # 峰值 = 初始 5 倍
-        #     total_steps=configs.max_iterations, # 总 step（你预估）
-        #     pct_start=0.3,                      # 前 30% warm-up
-        #     anneal_strategy='cos',              # 余弦下降
-        #     div_factor=25.0,                    # 初始 = 峰值/25
-        #     final_div_factor=1e4                # 最终 = 峰值/10000
-        # )
+        self.optimizer = AdamW(self.network.parameters(), lr=configs.lr, betas=(0.8, 0.95))
+
+        self.mean_p_t = torch.tensor(configs.target_mean, dtype=torch.float32, device=configs.device).view(1, 1, -1, 1, 1)
+        self.std_p_t = torch.tensor(configs.target_std, dtype=torch.float32, device=configs.device).view(1, 1, -1, 1, 1)
+        self.dx = configs.dx
+        self.dy = configs.dy
+        # dz 如果是按层厚度给定，比如 list/np.array
+        self.dz_t = torch.tensor(configs.dz, dtype=torch.float32, device=configs.device).view(1, 1, -1, 1, 1)
 
     def save(self, itr):
-        stats = {}
-        stats['net_param'] = self.network.state_dict()
-        checkpoint_path = os.path.join(self.configs.save_dir, 'model.ckpt'+'-'+str(itr))
+        stats = {'net_param': self.network.state_dict()}
+        checkpoint_path = os.path.join(self.configs.save_dir, f'model.ckpt-{itr}')
         torch.save(stats, checkpoint_path)
-        print("save model to %s" % checkpoint_path)
+        print(f"save model to {checkpoint_path}")
 
     def load(self, checkpoint_path):
         print('load model:', checkpoint_path)
-        stats = torch.load(checkpoint_path)
+        stats = torch.load(checkpoint_path, map_location=self.configs.device)
         self.network.load_state_dict(stats['net_param'])
 
-    def train(self, forcings, init_cond, static_inputs, targets):
+    def _init_states(self, batch, height, width):
+        h_t, c_t, delta_c_list, delta_m_list = [], [], [], []
+        for hidden in self.num_hidden:
+            zeros = torch.zeros([batch, hidden, height, width], device=self.configs.device)
+            h_t.append(zeros)
+            c_t.append(zeros)
+            delta_c_list.append(zeros)
+            delta_m_list.append(zeros)
+        return h_t, c_t, delta_c_list, delta_m_list
+    
+    def _compute_storage_component(self, next_frames, targets, alpha, n, theta_r, 
+                                   theta_s, porosity, specific_storage, mask):
+
+        next_frames_phys = next_frames * self.std_p_t + self.mean_p_t
+        targets_phys = targets * self.std_p_t + self.mean_p_t
+
+        sat_pred = self.vg_saturation_torch(next_frames_phys, alpha, n, theta_r, theta_s)
+        sat_true = self.vg_saturation_torch(targets_phys, alpha, n, theta_r, theta_s)
+
+        subsurface_pred = self.calculate_subsurface_storage_torch(
+            porosity,
+            next_frames_phys,
+            sat_pred,
+            specific_storage,
+            dx=self.dx,
+            dy=self.dy,
+            dz=self.dz_t,
+            mask=mask
+        )
+
+        subsurface_true = self.calculate_subsurface_storage_torch(
+            porosity,
+            targets_phys,
+            sat_true,
+            specific_storage,
+            dx=self.dx,
+            dy=self.dy,
+            dz=self.dz_t,
+            mask=mask
+        )
+
+        surface_pred = self.calculate_surface_storage_torch(
+            next_frames_phys, dx=self.dx, dy=self.dy, mask=mask
+        )
+
+        surface_true = self.calculate_surface_storage_torch(
+            targets_phys, dx=self.dx, dy=self.dy, mask=mask
+        )
+
+        storage_pred = subsurface_pred.sum(dim=2) + surface_pred
+        storage_true = subsurface_true.sum(dim=2) + surface_true
+
+        storage_loss = torch.mean(torch.abs(storage_pred - storage_true))
+        return self.configs.storage_beta * storage_loss
+
+    def train(self, forcings, init_cond, static_inputs, targets,
+              alpha, n, theta_r, theta_s, porosity, specific_storage, mask):
+        
+        if alpha.ndim == 4:
+            alpha = alpha.unsqueeze(1)              # [B,1,C,H,W]
+            n = n.unsqueeze(1)
+            theta_r = theta_r.unsqueeze(1)
+            theta_s = theta_s.unsqueeze(1)
+            porosity = porosity.unsqueeze(1)
+            specific_storage = specific_storage.unsqueeze(1)
+            mask = mask.unsqueeze(1)
+
         self.network.train()
         self.optimizer.zero_grad()
 
         batch, timesteps, channels, height, width = forcings.shape
 
         next_frames = []
-        h_t = []
-        c_t = []
-        delta_c_list = []
-        delta_m_list = []
         decouple_loss = []
 
-        for i in range(self.num_layers):
-            zeros = torch.zeros([batch, self.num_hidden[i], height, width]).to(self.configs.device)
-            h_t.append(zeros)
-            c_t.append(zeros)
-            delta_c_list.append(zeros)
-            delta_m_list.append(zeros)
+        h_t, c_t, delta_c_list, delta_m_list = self._init_states(batch, height, width)
 
         memory = self.network.memory_encoder(init_cond[:, 0])
         c_t = list(torch.split(self.network.cell_encoder(static_inputs[:, 0]), self.num_hidden, dim=1))
@@ -91,51 +138,82 @@ class Model(object):
         decouple_loss = torch.mean(torch.stack(decouple_loss, dim=0))
         next_frames = torch.stack(next_frames, dim=1)
 
-        # 计算预测梯度
         dy_pred = next_frames[:, :, :, 1:, :] - next_frames[:, :, :, :-1, :]
         dx_pred = next_frames[:, :, :, :, 1:] - next_frames[:, :, :, :, :-1]
-
-        # 计算真实梯度
         dy_true = targets[:, :, :, 1:, :] - targets[:, :, :, :-1, :]
         dx_true = targets[:, :, :, :, 1:] - targets[:, :, :, :, :-1]
+        grad_loss = torch.mean(torch.abs(dy_pred - dy_true)) + torch.mean(torch.abs(dx_pred - dx_true))
 
-        # 梯度差异 loss
-        grad_loss = torch.mean(torch.abs(dy_pred - dy_true)) + \
-                    torch.mean(torch.abs(dx_pred - dx_true))
-
-        # loss = self.network.MSE_criterion(next_frames, targets) + \
-        #     self.configs.grad_beta * grad_loss + \
-        #     self.configs.decouple_beta * decouple_loss
-
+        storage_component = self._compute_storage_component(
+            next_frames, targets, alpha, n, theta_r, theta_s,
+            porosity, specific_storage, mask)
         mse_loss = self.network.MSE_criterion(next_frames, targets)
         grad_component = self.configs.grad_beta * grad_loss
         decouple_component = self.configs.decouple_beta * decouple_loss
 
-        total_loss = mse_loss + grad_component + decouple_component
+        total_loss = mse_loss + grad_component + decouple_component + storage_component
 
         total_loss.backward()
         self.optimizer.step()
-        # self.scheduler.step()
-        # return loss.detach().cpu().numpy()
-        return total_loss.item(), mse_loss.item(), grad_component.item(), decouple_component.item()
 
+        return (
+            total_loss.item(),
+            mse_loss.item(),
+            grad_component.item(),
+            decouple_component.item(),
+            storage_component.item()
+        )
+    
+    def vg_saturation_torch(self, pressure, alpha, n, theta_r, theta_s):
+        m = 1.0 - 1.0 / n
+        h_neg = torch.abs(pressure)
+
+        vg_expr = (1.0 + (alpha * h_neg) ** n) ** (-m)
+        Se = torch.where(pressure < 0, vg_expr, torch.ones_like(pressure))
+
+        theta = theta_r + (theta_s - theta_r) * Se
+        return theta
+
+
+    def calculate_subsurface_storage_torch(
+        self, porosity, pressure, saturation, specific_storage, dx, dy, dz, mask=None
+    ):
+        if mask is None:
+            mask = torch.ones_like(porosity)
+
+        mask = torch.where(mask > 0, torch.ones_like(mask), torch.zeros_like(mask))
+
+        if dz.ndim == 1:
+            dz = dz.view(1, 1, -1, 1, 1)
+
+        incompressible = porosity * saturation * dz * dx * dy
+        compressible = pressure * saturation * specific_storage * dz * dx * dy
+        compressible = torch.where(pressure < 0, torch.zeros_like(compressible), compressible)
+
+        total = incompressible + compressible
+        total = torch.where(mask == 0, torch.zeros_like(total), total)
+        return total
+
+    def calculate_surface_storage_torch(self, pressure, dx, dy, mask=None):
+        if mask is None:
+            mask = torch.ones_like(pressure)
+
+        mask = torch.where(mask > 0, torch.ones_like(mask), torch.zeros_like(mask))
+        surface_mask = mask[:, :, -1, :, :]
+
+        total = pressure[:, :, -1, :, :] * dx * dy
+        total = torch.where(total < 0, torch.zeros_like(total), total)
+        total = torch.where(surface_mask == 0, torch.zeros_like(total), total)
+        return total
+    
+####test
     def test(self, forcings, init_cond, static_inputs):
         self.network.eval()
         with torch.no_grad():
             batch, timesteps, channels, height, width = forcings.shape
 
             next_frames = []
-            h_t = []
-            c_t = []
-            delta_c_list = []
-            delta_m_list = []
-
-            for i in range(self.num_layers):
-                zeros = torch.zeros([batch, self.num_hidden[i], height, width]).to(self.configs.device)
-                h_t.append(zeros)
-                c_t.append(zeros)
-                delta_c_list.append(zeros)
-                delta_m_list.append(zeros)
+            h_t, c_t, delta_c_list, delta_m_list = self._init_states(batch, height, width)
 
             memory = self.network.memory_encoder(init_cond[:, 0])
             c_t = list(torch.split(self.network.cell_encoder(static_inputs[:, 0]), self.num_hidden, dim=1))
@@ -145,14 +223,14 @@ class Model(object):
             h_t_temp = []
 
             for t in range(timesteps):
-
                 net, net_temp, h_t_temp, _, h_t, c_t, memory, delta_c_list, delta_m_list = \
                 self.network(forcings[:, t], net, net_temp, h_t_temp, h_t, c_t, memory, delta_c_list, delta_m_list)
                 next_frames.append(net)
             next_frames = torch.stack(next_frames, dim=1)
 
         return next_frames
-
+    
+###test_lsm
     def test_lsm(self):
 
         self.network.eval()
@@ -163,61 +241,47 @@ class Model(object):
             os.mkdir(res_path)
 
             nx, ny = self.configs.img_width, self.configs.img_height
-            num_patch_y, num_patch_x = ny // self.configs.patch_size, nx // self.configs.patch_size
-            length_y, length_x = num_patch_y*self.configs.patch_size, num_patch_x*self.configs.patch_size
-            num_patch = num_patch_x*num_patch_y
-            delta_height = ny - length_y
-            delta_width  = nx - length_x
+            patch_size = self.configs.patch_size
+            ss_stride = self.configs.ss_stride_test
 
-            static_inputs = torch.empty((num_patch, 1, self.configs.static_channel, self.configs.patch_size,
-                                         self.configs.patch_size), dtype=torch.float)  # np.float32
-            init_cond = torch.empty((num_patch, 1, self.configs.init_cond_channel, self.configs.patch_size, 
-                                     self.configs.patch_size), dtype=torch.float)  # np.float32
-            forcings = torch.empty((num_patch, 1, self.configs.act_channel, self.configs.patch_size,
-                                         self.configs.patch_size), dtype=torch.float)  # np.float32
+            ys = list(range(0, ny - patch_size + 1, ss_stride))
+            xs = list(range(0, nx - patch_size + 1, ss_stride))
+
+            if ys[-1] != ny - patch_size:
+                ys.append(ny - patch_size)
+
+            if xs[-1] != nx - patch_size:
+                xs.append(nx - patch_size)
+
+            coords_space = [(y, x) for y in ys for x in xs]
+
             # static
             static_inputs_name = os.path.join(self.configs.static_inputs_path, self.configs.static_inputs_filename)
             frame_np = read_pfb(get_absolute_path(static_inputs_name)).astype(np.float32)
-            frame_np = frame_np[:, :length_y, :length_x] # drop off
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
             mean = frame_im.mean(dim=(3,4), keepdim=True)
             std = frame_im.std(dim=(3,4), keepdim=True)+1e-8
             frame_im = (frame_im-mean)/std
-            static_inputs[:,:,:,:,:] = preprocess.reshape_patch(frame_im, self.configs.patch_size)
-            static_inputs = static_inputs.to(self.configs.device)
+            static_inputs = preprocess.reshape_patch(frame_im, coords_space, patch_size).to(self.configs.device)
 
-            mean_p = torch.tensor(self.configs.target_mean).view(1, 1, -1, 1, 1)
-            std_p = torch.tensor(self.configs.target_std).view(1, 1, -1, 1, 1)
+            mean_p = torch.tensor(self.configs.target_mean, dtype=torch.float32).view(1, 1, -1, 1, 1)
+            std_p = torch.tensor(self.configs.target_std, dtype=torch.float32).view(1, 1, -1, 1, 1)
+            mean_a = torch.tensor(self.configs.force_mean, dtype=torch.float32).view(1, 1, -1, 1, 1)
+            std_a = torch.tensor(self.configs.force_std, dtype=torch.float32).view(1, 1, -1, 1, 1)
 
-            mean_a = torch.tensor(self.configs.force_mean).view(1, 1, -1, 1, 1)
-            std_a = torch.tensor(self.configs.force_std).view(1, 1, -1, 1, 1)
+            targets_prefix = os.path.join(self.configs.targets_path, self.configs.pf_runname + ".out.")
 
-            targets_filename = self.configs.pf_runname + ".out."
-            targets_path = os.path.join(self.configs.targets_path, targets_filename)
-
-            init_cond_name = targets_path + 'press.' + str(self.configs.test_start_step - 1).zfill(5) + ".pfb"
+            init_cond_name = targets_prefix + 'press.' + str(self.configs.test_start_step - 1).zfill(5) + ".pfb"
             frame_np = read_pfb(get_absolute_path(init_cond_name)).astype(np.float32)
-            frame_np = frame_np[:, :length_y, :length_x]
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
             frame_im = (frame_im-mean_p)/std_p
-            init_cond[:,:,:,:,:] = preprocess.reshape_patch(frame_im, self.configs.patch_size)
-            init_cond = init_cond.to(self.configs.device)
+            init_cond = preprocess.reshape_patch(frame_im, coords_space, patch_size).to(self.configs.device)
 
             #change forcings to static to get the shape?
             batch, _, channels, height, width = static_inputs.shape
 
             next_frames = []
-            h_t = []
-            c_t = []
-            delta_c_list = []
-            delta_m_list = []
-
-            for i in range(self.num_layers):
-                zeros = torch.zeros([batch, self.num_hidden[i], height, width]).to(self.configs.device)
-                h_t.append(zeros)
-                c_t.append(zeros)
-                delta_c_list.append(zeros)
-                delta_m_list.append(zeros)
+            h_t, c_t, delta_c_list, delta_m_list = self._init_states(batch, height, width)
 
             memory = self.network.memory_encoder(init_cond[:, 0])
             c_t = list(torch.split(self.network.cell_encoder(static_inputs[:, 0]), self.num_hidden, dim=1))
@@ -229,12 +293,10 @@ class Model(object):
             lib_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'libclm_lsm.so'))
             lib = ctypes.CDLL(lib_path)
             print("CLM shared library loaded successfully.")
-
             self._set_clm_lsm_c_argtypes(lib)
 
             # 构造虚拟参数（用实际数据替换）
             nz, clm_nz = 11, 10
-
             size_2d  = (nx+2) * (ny+2) * 3
             size_3d  = (nx+2) * (ny+2) * (nz+2)
             size_clm = (nx+2) * (ny+2) * (clm_nz+2)
@@ -245,11 +307,10 @@ class Model(object):
             temp_arr_3d = np.ones(size_3d, dtype=np.float64)
             temp_arr_clm = np.ones(size_clm, dtype=np.float64)
 
-            alpha_filename, n_filename = targets_path+'alpha.pfb', targets_path+'n.pfb'
-            theta_s_filename, theta_r_filename = targets_path+'ssat.pfb', targets_path+'sres.pfb'
-
-            mask_filename, porosity_filename = targets_path+'mask.pfb', targets_path+'porosity.pfb'
-            pf_dz_mult_filename = targets_path+'dz_mult.pfb'
+            alpha_filename, n_filename = targets_prefix+'alpha.pfb', targets_prefix+'n.pfb'
+            theta_s_filename, theta_r_filename = targets_prefix+'ssat.pfb', targets_prefix+'sres.pfb'
+            mask_filename, porosity_filename = targets_prefix+'mask.pfb', targets_prefix+'porosity.pfb'
+            pf_dz_mult_filename = targets_prefix+'dz_mult.pfb'
 
             alpha = read_pfb(alpha_filename)
             n_value = read_pfb(n_filename)
@@ -258,16 +319,12 @@ class Model(object):
 
             press_temp = read_pfb(init_cond_name)
             topo = read_pfb(mask_filename)
-            #topo[:,length_y:,length_x:] = -9999.
             porosity = read_pfb(porosity_filename)
             pf_dz_mult = read_pfb(pf_dz_mult_filename)
 
-            topo = np.pad(topo, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0)
-            topo = topo.flatten()
-            porosity = np.pad(porosity, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0)
-            porosity = porosity.flatten()
-            pf_dz_mult = np.pad(pf_dz_mult, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0)
-            pf_dz_mult = pf_dz_mult.flatten()
+            topo = np.pad(topo, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0).flatten()
+            porosity = np.pad(porosity, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0).flatten()
+            pf_dz_mult = np.pad(pf_dz_mult, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0).flatten()
 
             for t in range(self.configs.test_start_step - 1, self.configs.test_end_step):
 
@@ -288,10 +345,8 @@ class Model(object):
                 qatm_pf_filename = general_path +'.SPFH.' + time1 + '_to_' + time2 + '.pfb'
 
                 # read forcings and pad dim
-                pf_vars = {'sw_pf': sw_pf_filename, 'lw_pf': lw_pf_filename,
-                           'prcp_pf': prcp_pf_filename, 'tas_pf': tas_pf_filename,
-                           'u_pf': u_pf_filename, 'v_pf': v_pf_filename,
-                           'patm_pf': patm_pf_filename, 'qatm_pf': qatm_pf_filename}
+                pf_vars = {'sw_pf': sw_pf_filename, 'lw_pf': lw_pf_filename, 'prcp_pf': prcp_pf_filename, 'tas_pf': tas_pf_filename,
+                           'u_pf': u_pf_filename, 'v_pf': v_pf_filename, 'patm_pf': patm_pf_filename, 'qatm_pf': qatm_pf_filename}
                 variables = {}
                 for var_name, filename in pf_vars.items():
                     data = read_pfb(get_absolute_path(filename))[hour, :, :]
@@ -302,15 +357,13 @@ class Model(object):
 
                 # cal saturation
                 satur = self._vg_saturation(press_temp, alpha, n_value, theta_r, theta_s)
-                press = np.pad(press_temp, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0)
-                press = press.flatten()
+                press = np.pad(press_temp, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0).flatten()
 
                 # pad ghost cells and flatten
                 variables = {'satur': satur, 'sw_pf': sw_pf, 'lw_pf': lw_pf, 'prcp_pf': prcp_pf,
                              'tas_pf': tas_pf, 'u_pf': u_pf, 'v_pf': v_pf, 'patm_pf': patm_pf, 'qatm_pf': qatm_pf}
                 for name, arr in variables.items():
-                    arr = np.pad(arr, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0)
-                    arr = arr.flatten()
+                    arr = np.pad(arr, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0).flatten()
                     variables[name] = arr
                 satur = variables['satur']
                 sw_pf, lw_pf, prcp_pf, tas_pf = variables['sw_pf'], variables['lw_pf'], variables['prcp_pf'], variables['tas_pf']
@@ -368,42 +421,46 @@ class Model(object):
                     1, 0, 1, 1,                              # clm_next, clm_write_logs, clm_last_rst, clm_daily_rst
                     10, 10                                   # pf_nlevsoi, pf_nlevlak ####
                 )
-                #reshape evaptrans to get the forcing to network
+
                 evap_trans = np.reshape(temp_arr_3d,(nz+2,ny+2,nx+2)).astype(np.float32)[1:nz+1,1:ny+1,1:nx+1]
                 evap_trans = torch.from_numpy(evap_trans).unsqueeze(0).unsqueeze(0)
-                evap_trans = ((evap_trans-mean_a)/std_a)[:, :, 1:nz, :length_y, :length_x]
-                forcings[:,:,:,:,:] = preprocess.reshape_patch(evap_trans, self.configs.patch_size)
-                forcings = forcings.to(self.configs.device)
+                evap_trans = ((evap_trans - mean_a) / std_a)[:, :, 1:nz, :, :]
+                forcings = preprocess.reshape_patch(evap_trans, coords_space, patch_size).to(self.configs.device)
 
-                heat_lh = np.reshape(temp_arr_lh,(3,ny+2,nx+2))[1,1:length_y+1,1:length_x+1]
-                heat_sh = np.reshape(temp_arr_sh,(3,ny+2,nx+2))[1,1:length_y+1,1:length_x+1]
-                temp_gt = np.reshape(temp_arr_2d,(3,ny+2,nx+2))[1,1:length_y+1,1:length_x+1]
-                trans = np.reshape(temp_arr_3d,(nz+2,ny+2,nx+2))[1:nz+1,1:ny+1,1:nx+1]
+                heat_lh = np.reshape(temp_arr_lh, (3, ny+2, nx+2))[1, 1:ny+1, 1:nx+1]
+                heat_sh = np.reshape(temp_arr_sh, (3, ny+2, nx+2))[1, 1:ny+1, 1:nx+1]
+                temp_gt = np.reshape(temp_arr_2d, (3, ny+2, nx+2))[1, 1:ny+1, 1:nx+1]
+                trans = np.reshape(temp_arr_3d, (nz+2, ny+2, nx+2))[1:nz+1, 1:ny+1, 1:nx+1]
 
-                lsm_name = os.path.join(res_path, 'heat_lh.' + str(t+1).zfill(5) + '.pfb')
-                write_pfb(lsm_name, heat_lh, dist=False)
-
-                lsm_name = os.path.join(res_path, 'heat_sh.' + str(t+1).zfill(5) + '.pfb')
-                write_pfb(lsm_name, heat_sh, dist=False)
-
-                lsm_name = os.path.join(res_path, 'temp_gt.' + str(t+1).zfill(5) + '.pfb')
-                write_pfb(lsm_name, temp_gt, dist=False)
-
-                lsm_name = os.path.join(res_path, 'evap.' + str(t+1).zfill(5) + '.pfb')
-                write_pfb(lsm_name, trans, dist=False)
+                write_pfb(os.path.join(res_path, 'heat_lh.' + str(t+1).zfill(5) + '.pfb'), heat_lh, dist=False)
+                write_pfb(os.path.join(res_path, 'heat_sh.' + str(t+1).zfill(5) + '.pfb'), heat_sh, dist=False)
+                write_pfb(os.path.join(res_path, 'temp_gt.' + str(t+1).zfill(5) + '.pfb'), temp_gt, dist=False)
+                write_pfb(os.path.join(res_path, 'evap.' + str(t+1).zfill(5) + '.pfb'), trans, dist=False)
 
                 net, net_temp, h_t_temp, _, h_t, c_t, memory, delta_c_list, delta_m_list = \
                 self.network(forcings[:,0], net, net_temp, h_t_temp, h_t, c_t, memory, delta_c_list, delta_m_list)
                 next_frames.append(net)
 
-                #reshape back net to get the init_cond for next step
-                press_ = preprocess.reshape_patch_back(net.unsqueeze(1), num_patch_x, num_patch_y)
-                press_ = torch.squeeze((press_.detach().cpu())*std_p+mean_p).numpy().astype(np.float64)
-                # padding
-                # press_temp[:,:length_y,:length_x] = press_
-                press_temp = np.pad(press_, pad_width=((0, 0), (0,delta_height), (0,delta_width)), mode='reflect')
+                press_ = preprocess.reshape_patch_back(
+                    net.unsqueeze(1),   # [num_patch, 1, C, patch, patch]
+                    coords_space,
+                    ny,
+                    nx,
+                    patch_size
+                )
+                press_ = torch.squeeze((press_.detach().cpu()) * std_p + mean_p).numpy().astype(np.float64)
+                assert press_.ndim == 3, f"press_ shape wrong: {press_.shape}"
+                assert press_.shape[1] == ny and press_.shape[2] == nx, f"press_ shape wrong: {press_.shape}"
+                press_temp = press_
 
             next_frames = torch.stack(next_frames, dim=1)
+            next_frames = preprocess.reshape_patch_back(
+                next_frames,
+                coords_space,
+                ny,
+                nx,
+                patch_size
+            )
         # return next_frames.detach().cpu().numpy()
         return next_frames, mean_p, std_p
     
