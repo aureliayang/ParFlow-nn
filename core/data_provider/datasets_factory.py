@@ -4,11 +4,13 @@ datasets_map = {
     'pfnn': pfnn,
 }
 
-
 def data_provider(configs):
     dataset_name = configs.dataset_name
     if dataset_name not in datasets_map:
-        raise ValueError(f'Name of dataset unknown: {dataset_name}')
+        raise ValueError(
+            f"Unknown dataset_name: {dataset_name}. "
+            f"Available datasets: {list(datasets_map.keys())}"
+        )
 
     input_handle = datasets_map[dataset_name].DataProcess(configs)
 

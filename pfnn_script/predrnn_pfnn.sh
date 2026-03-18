@@ -1,4 +1,4 @@
-export CUDA_VISIBLE_DEVICES=0
+# export CUDA_VISIBLE_DEVICES=0
 cd ..
 python -u run.py \
     --is_training 1 \
@@ -7,8 +7,8 @@ python -u run.py \
     --dataset_name pfnn \
     --pf_runname unname_test \
     --model_name predrnn_pf \
-    --save_dir checkpoints/pfnn_predrnn \
-    --gen_frm_dir results/pfnn_predrnn \
+    --save_dir checkpoints/pfnn_predrnn2 \
+    --gen_frm_dir results/pfnn_predrnn2 \
     --norm_file /data/aurelia-data/workspace/clm_call/normalize_1_6000.yaml \
     --attn_mode none \
     --training_start_step 1 \
@@ -32,10 +32,10 @@ python -u run.py \
     --static_channel 40 \
     --act_channel 10 \
     --img_channel 11 \
-    --lr 0.0003 \
+    --lr 0.003 \
     --grad_beta 0.1 \
     --batch_size 16 \
-    --max_iterations 80000 \
+    --max_iterations 50000 \
     --display_interval 100 \
     --test_interval 1000 \
     --snapshot_interval 5000 \

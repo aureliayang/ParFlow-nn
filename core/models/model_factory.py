@@ -11,11 +11,14 @@ from parflow.tools.io import write_pfb, read_pfb
 from core.utils import preprocess
 from parflow.tools.fs import get_absolute_path
 
+
 class Model(object):
     def __init__(self, configs):
         self.configs = configs
         self.num_hidden = [int(x) for x in configs.num_hidden.split(',')]
         self.num_layers = len(self.num_hidden)
+        self.use_storage_loss = abs(float(configs.storage_beta)) > 1e-12
+
         networks_map = {
             'predrnn_pf': predrnn_pf.RNN,
         }
@@ -28,12 +31,28 @@ class Model(object):
 
         self.optimizer = AdamW(self.network.parameters(), lr=configs.lr, betas=(0.8, 0.95))
 
-        self.mean_p_t = torch.tensor(configs.target_mean, dtype=torch.float32, device=configs.device).view(1, 1, -1, 1, 1)
-        self.std_p_t = torch.tensor(configs.target_std, dtype=torch.float32, device=configs.device).view(1, 1, -1, 1, 1)
+        self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
+            self.optimizer,
+            max_lr=0.003,
+            total_steps=configs.max_iterations,
+            pct_start=0.3,
+            anneal_strategy='cos',
+            div_factor=10,
+            final_div_factor=100.0
+        )
+
+        self.mean_p_t = torch.tensor(
+            configs.target_mean, dtype=torch.float32, device=configs.device
+        ).view(1, 1, -1, 1, 1)
+        self.std_p_t = torch.tensor(
+            configs.target_std, dtype=torch.float32, device=configs.device
+        ).view(1, 1, -1, 1, 1)
+
         self.dx = configs.dx
         self.dy = configs.dy
-        # dz 如果是按层厚度给定，比如 list/np.array
-        self.dz_t = torch.tensor(configs.dz, dtype=torch.float32, device=configs.device).view(1, 1, -1, 1, 1)
+        self.dz_t = torch.tensor(
+            configs.dz, dtype=torch.float32, device=configs.device
+        ).view(1, 1, -1, 1, 1)
 
     def save(self, itr):
         stats = {'net_param': self.network.state_dict()}
@@ -43,7 +62,7 @@ class Model(object):
 
     def load(self, checkpoint_path):
         print('load model:', checkpoint_path)
-        stats = torch.load(checkpoint_path, map_location=self.configs.device)
+        stats = torch.load(checkpoint_path, map_location=torch.device(self.configs.device))
         self.network.load_state_dict(stats['net_param'])
 
     def _init_states(self, batch, height, width):
@@ -55,9 +74,27 @@ class Model(object):
             delta_c_list.append(zeros)
             delta_m_list.append(zeros)
         return h_t, c_t, delta_c_list, delta_m_list
-    
-    def _compute_storage_component(self, next_frames, targets, alpha, n, theta_r, 
-                                   theta_s, porosity, specific_storage, mask):
+
+    def _compute_storage_component(
+        self,
+        next_frames,
+        targets,
+        alpha,
+        n,
+        theta_r,
+        theta_s,
+        porosity,
+        specific_storage,
+        mask
+    ):
+        if not self.use_storage_loss:
+            return torch.zeros((), dtype=next_frames.dtype, device=next_frames.device)
+
+        required = [alpha, n, theta_r, theta_s, porosity, specific_storage, mask]
+        if any(x is None for x in required):
+            raise ValueError(
+                "Storage loss is enabled, but one or more storage-related tensors are None."
+            )
 
         next_frames_phys = next_frames * self.std_p_t + self.mean_p_t
         targets_phys = targets * self.std_p_t + self.mean_p_t
@@ -101,17 +138,35 @@ class Model(object):
         storage_loss = torch.mean(torch.abs(storage_pred - storage_true))
         return self.configs.storage_beta * storage_loss
 
-    def train(self, forcings, init_cond, static_inputs, targets,
-              alpha, n, theta_r, theta_s, porosity, specific_storage, mask):
-        
-        if alpha.ndim == 4:
-            alpha = alpha.unsqueeze(1)              # [B,1,C,H,W]
-            n = n.unsqueeze(1)
-            theta_r = theta_r.unsqueeze(1)
-            theta_s = theta_s.unsqueeze(1)
-            porosity = porosity.unsqueeze(1)
-            specific_storage = specific_storage.unsqueeze(1)
-            mask = mask.unsqueeze(1)
+    def train(
+        self,
+        forcings,
+        init_cond,
+        static_inputs,
+        targets,
+        alpha,
+        n,
+        theta_r,
+        theta_s,
+        porosity,
+        specific_storage,
+        mask
+    ):
+        if self.use_storage_loss:
+            if alpha is None or n is None or theta_r is None or theta_s is None \
+               or porosity is None or specific_storage is None or mask is None:
+                raise ValueError(
+                    "Storage loss is enabled, but storage-related inputs contain None."
+                )
+
+            if alpha.ndim == 4:
+                alpha = alpha.unsqueeze(1)
+                n = n.unsqueeze(1)
+                theta_r = theta_r.unsqueeze(1)
+                theta_s = theta_s.unsqueeze(1)
+                porosity = porosity.unsqueeze(1)
+                specific_storage = specific_storage.unsqueeze(1)
+                mask = mask.unsqueeze(1)
 
         self.network.train()
         self.optimizer.zero_grad()
@@ -132,9 +187,20 @@ class Model(object):
 
         for t in range(timesteps):
             net, net_temp, h_t_temp, d_loss_step, h_t, c_t, memory, delta_c_list, delta_m_list = \
-            self.network(forcings[:, t], net, net_temp, h_t_temp, h_t, c_t, memory, delta_c_list, delta_m_list)
+                self.network(
+                    forcings[:, t],
+                    net,
+                    net_temp,
+                    h_t_temp,
+                    h_t,
+                    c_t,
+                    memory,
+                    delta_c_list,
+                    delta_m_list
+                )
             next_frames.append(net)
             decouple_loss += d_loss_step
+
         decouple_loss = torch.mean(torch.stack(decouple_loss, dim=0))
         next_frames = torch.stack(next_frames, dim=1)
 
@@ -145,8 +211,17 @@ class Model(object):
         grad_loss = torch.mean(torch.abs(dy_pred - dy_true)) + torch.mean(torch.abs(dx_pred - dx_true))
 
         storage_component = self._compute_storage_component(
-            next_frames, targets, alpha, n, theta_r, theta_s,
-            porosity, specific_storage, mask)
+            next_frames,
+            targets,
+            alpha,
+            n,
+            theta_r,
+            theta_s,
+            porosity,
+            specific_storage,
+            mask
+        )
+
         mse_loss = self.network.MSE_criterion(next_frames, targets)
         grad_component = self.configs.grad_beta * grad_loss
         decouple_component = self.configs.decouple_beta * decouple_loss
@@ -155,6 +230,7 @@ class Model(object):
 
         total_loss.backward()
         self.optimizer.step()
+        self.scheduler.step()
 
         return (
             total_loss.item(),
@@ -163,7 +239,7 @@ class Model(object):
             decouple_component.item(),
             storage_component.item()
         )
-    
+
     def vg_saturation_torch(self, pressure, alpha, n, theta_r, theta_s):
         m = 1.0 - 1.0 / n
         h_neg = torch.abs(pressure)
@@ -173,7 +249,6 @@ class Model(object):
 
         theta = theta_r + (theta_s - theta_r) * Se
         return theta
-
 
     def calculate_subsurface_storage_torch(
         self, porosity, pressure, saturation, specific_storage, dx, dy, dz, mask=None
@@ -205,8 +280,8 @@ class Model(object):
         total = torch.where(total < 0, torch.zeros_like(total), total)
         total = torch.where(surface_mask == 0, torch.zeros_like(total), total)
         return total
-    
-####test
+
+    #### test
     def test(self, forcings, init_cond, static_inputs):
         self.network.eval()
         with torch.no_grad():
@@ -224,8 +299,19 @@ class Model(object):
 
             for t in range(timesteps):
                 net, net_temp, h_t_temp, _, h_t, c_t, memory, delta_c_list, delta_m_list = \
-                self.network(forcings[:, t], net, net_temp, h_t_temp, h_t, c_t, memory, delta_c_list, delta_m_list)
+                    self.network(
+                        forcings[:, t],
+                        net,
+                        net_temp,
+                        h_t_temp,
+                        h_t,
+                        c_t,
+                        memory,
+                        delta_c_list,
+                        delta_m_list
+                    )
                 next_frames.append(net)
+
             next_frames = torch.stack(next_frames, dim=1)
 
         return next_frames
@@ -238,7 +324,7 @@ class Model(object):
         with torch.no_grad():
 
             res_path = os.path.join(self.configs.gen_frm_dir, 'lsm_result')
-            os.mkdir(res_path)
+            os.makedirs(res_path, exist_ok=True)
 
             nx, ny = self.configs.img_width, self.configs.img_height
             patch_size = self.configs.patch_size
