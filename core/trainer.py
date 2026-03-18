@@ -9,7 +9,7 @@ from parflow.tools.io import write_pfb
 def train(model, forcings, init_cond, static_inputs, targets,
           alpha, n, theta_r, theta_s, porosity, specific_storage, mask,
           configs, itr):
-    total, mse, grad, decouple, storage = model.train(
+    total, mse, grad, decouple, storage, lr = model.train(
         forcings, init_cond, static_inputs, targets,
         alpha, n, theta_r, theta_s, porosity, specific_storage, mask
     )
@@ -18,6 +18,7 @@ def train(model, forcings, init_cond, static_inputs, targets,
         print(
             datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             f"itr: {itr} "
+            f"lr: {lr:.8f} "
             f"total: {total:.6f} "
             f"MSE: {mse:.6f} "
             f"grad: {grad:.6f} "
@@ -26,12 +27,13 @@ def train(model, forcings, init_cond, static_inputs, targets,
         )
 
 
-def test(model, test_input_handle, configs, itr):
+def test(model, test_input_handle, configs, itr, save_results=False):
     print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'test...')
 
     test_input_handle.begin(do_shuffle=False)
-    res_path = os.path.join(configs.gen_frm_dir, str(itr))
-    os.makedirs(res_path, exist_ok=True)
+    if save_results:
+        res_path = os.path.join(configs.gen_frm_dir, str(itr))
+        os.makedirs(res_path, exist_ok=True)
 
     batch_id = 0
     mean_p = torch.tensor(configs.target_mean, dtype=torch.float32).view(1, 1, -1, 1, 1)
@@ -56,8 +58,9 @@ def test(model, test_input_handle, configs, itr):
 
         img_gen = model.test(forcings, init_cond, static_inputs)
 
-        path = os.path.join(res_path, str(batch_id))
-        os.makedirs(path, exist_ok=True)
+        if save_results:
+            path = os.path.join(res_path, str(batch_id))
+            os.makedirs(path, exist_ok=True)
 
         num_patch = test_input_handle.num_patch
         coords_space = test_input_handle.coords_space
@@ -90,18 +93,19 @@ def test(model, test_input_handle, configs, itr):
         rmse_total = np.sqrt(np.mean((img_gen - img_tar) ** 2))
         print('RMSE_TOTAL =', rmse_total)
 
-        for i in range(img_gen.shape[0]):
-            file_name = os.path.join(
-                path,
-                'nn_gen.press.' + str(i + configs.test_start_step).zfill(5) + '.pfb'
-            )
-            write_pfb(file_name, img_gen[i, :, :, :], dist=False)
+        if save_results:
+            for i in range(img_gen.shape[0]):
+                file_name = os.path.join(
+                    path,
+                    'nn_gen.press.' + str(i + configs.test_start_step).zfill(5) + '.pfb'
+                )
+                write_pfb(file_name, img_gen[i, :, :, :], dist=False)
 
-            file_name = os.path.join(
-                path,
-                'nn_tar.press.' + str(i + configs.test_start_step).zfill(5) + '.pfb'
-            )
-            write_pfb(file_name, img_tar[i, :, :, :], dist=False)
+                file_name = os.path.join(
+                    path,
+                    'nn_tar.press.' + str(i + configs.test_start_step).zfill(5) + '.pfb'
+                )
+                write_pfb(file_name, img_tar[i, :, :, :], dist=False)
 
         test_input_handle.next()
 

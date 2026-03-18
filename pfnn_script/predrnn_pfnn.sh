@@ -3,13 +3,19 @@ cd ..
 python -u run.py \
     --is_training 1 \
     --is_test_lsm 0 \
-    --device cuda \
-    --dataset_name pfnn \
+    --seed 420 \
     --pf_runname unname_test \
-    --model_name predrnn_pf \
     --save_dir checkpoints/pfnn_predrnn2 \
     --gen_frm_dir results/pfnn_predrnn2 \
     --norm_file /data/aurelia-data/workspace/clm_call/normalize_1_6000.yaml \
+    --static_inputs_path /data/aurelia-data/workspace/clm_call \
+    --static_inputs_filename static_inputs_combined.pfb \
+    --forcings_path /data/aurelia-data/workspace/beijiang/outputs \
+    --targets_path /data/aurelia-data/workspace/beijiang/outputs \
+    --init_cond_channel 11 \
+    --static_channel 40 \
+    --act_channel 10 \
+    --img_channel 11 \
     --attn_mode none \
     --training_start_step 1 \
     --training_end_step 6000 \
@@ -24,14 +30,7 @@ python -u run.py \
     --st_stride_train 120 \
     --ss_stride_test 16 \
     --st_stride_test 120 \
-    --static_inputs_path /data/aurelia-data/workspace/clm_call \
-    --static_inputs_filename static_inputs_combined.pfb \
-    --forcings_path /data/aurelia-data/workspace/beijiang/outputs \
-    --targets_path /data/aurelia-data/workspace/beijiang/outputs \
-    --init_cond_channel 11 \
-    --static_channel 40 \
-    --act_channel 10 \
-    --img_channel 11 \
+    --lr_mode constant \
     --lr 0.003 \
     --grad_beta 0.1 \
     --batch_size 16 \

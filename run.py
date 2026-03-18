@@ -21,7 +21,7 @@ def build_parser():
     # training/test
     parser.add_argument("--is_training", type=int, default=1)
     parser.add_argument("--is_test_lsm", type=int, default=0)
-    parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--attn_mode", type=str, default="none")
 
     # data
@@ -79,11 +79,19 @@ def build_parser():
 
     # optimization
     parser.add_argument("--lr", type=float, default=0.001)
+    parser.add_argument("--lr_mode", type=str, default="constant",
+                    choices=["constant", "onecycle"])
+    parser.add_argument("--max_lr", type=float, default=0.002)
+    parser.add_argument("--onecycle_pct_start", type=float, default=0.4)
+    parser.add_argument("--onecycle_div_factor", type=float, default=5.0)
+    parser.add_argument("--onecycle_final_div_factor", type=float, default=50.0)
+
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--max_iterations", type=int, default=80000)
     parser.add_argument("--display_interval", type=int, default=100)
     parser.add_argument("--test_interval", type=int, default=5000)
     parser.add_argument("--snapshot_interval", type=int, default=5000)
+    parser.add_argument("--seed", type=int, default=420)
 
     # physics / grid
     parser.add_argument("--dx", type=float, default=961.72)
@@ -228,7 +236,8 @@ def train_wrapper(model, args):
             model.save(itr)
 
         if itr % args.test_interval == 0:
-            trainer.test(model, test_input_handle, args, itr)
+            trainer.test(model, test_input_handle, args, itr,
+                         save_results=(itr % args.snapshot_interval == 0))
 
         train_input_handle.next()
 
@@ -249,7 +258,7 @@ def main():
     validate_args(args)
     print_config(args)
 
-    set_seed(420)
+    set_seed(args.seed)
     debug_random_state(args.device)
     prepare_dirs(args)
 

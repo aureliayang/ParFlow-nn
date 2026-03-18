@@ -31,15 +31,20 @@ class Model(object):
 
         self.optimizer = AdamW(self.network.parameters(), lr=configs.lr, betas=(0.8, 0.95))
 
-        self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
-            self.optimizer,
-            max_lr=0.003,
-            total_steps=configs.max_iterations,
-            pct_start=0.3,
-            anneal_strategy='cos',
-            div_factor=10,
-            final_div_factor=100.0
-        )
+        if configs.lr_mode == "onecycle":
+            self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
+                self.optimizer,
+                max_lr=configs.max_lr,
+                total_steps=configs.max_iterations,
+                pct_start=configs.onecycle_pct_start,
+                anneal_strategy='cos',
+                div_factor=configs.onecycle_div_factor,
+                final_div_factor=configs.onecycle_final_div_factor
+            )
+        elif configs.lr_mode == "constant":
+            self.scheduler = None
+        else:
+            raise ValueError(f"Unknown lr_mode: {configs.lr_mode}")
 
         self.mean_p_t = torch.tensor(
             configs.target_mean, dtype=torch.float32, device=configs.device
@@ -230,14 +235,18 @@ class Model(object):
 
         total_loss.backward()
         self.optimizer.step()
-        self.scheduler.step()
+        if self.scheduler is not None:
+            self.scheduler.step()
+
+        current_lr = self.optimizer.param_groups[0]["lr"]
 
         return (
             total_loss.item(),
             mse_loss.item(),
             grad_component.item(),
             decouple_component.item(),
-            storage_component.item()
+            storage_component.item(),
+            current_lr,
         )
 
     def vg_saturation_torch(self, pressure, alpha, n, theta_r, theta_s):
