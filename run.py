@@ -47,6 +47,8 @@ def build_parser():
     parser.add_argument("--static_inputs_filename", type=str, default="")
     parser.add_argument("--forcings_path", type=str, default="")
     parser.add_argument("--targets_path", type=str, default="")
+    parser.add_argument("--forcings_paths", type=str, nargs="+", default=[])
+    parser.add_argument("--targets_paths", type=str, nargs="+", default=[])
     parser.add_argument("--norm_file", type=str, default="normalize.yaml")
     parser.add_argument("--target_mean", default=[])
     parser.add_argument("--target_std", default=[])
@@ -64,7 +66,7 @@ def build_parser():
 
     # CNN
     parser.add_argument("--num_hidden", type=str, default="16,16")
-    parser.add_argument("--filter_size", type=int, default=5)
+    parser.add_argument("--filter_size", type=int, default=3)
     parser.add_argument("--stride", type=int, default=1)
     parser.add_argument("--patch_size", type=int, default=16)
     parser.add_argument("--decouple_beta", type=float, default=1.0)
@@ -82,9 +84,9 @@ def build_parser():
     parser.add_argument("--lr_mode", type=str, default="constant",
                     choices=["constant", "onecycle"])
     parser.add_argument("--max_lr", type=float, default=0.002)
-    parser.add_argument("--onecycle_pct_start", type=float, default=0.4)
+    parser.add_argument("--onecycle_pct_start", type=float, default=0.3)
     parser.add_argument("--onecycle_div_factor", type=float, default=5.0)
-    parser.add_argument("--onecycle_final_div_factor", type=float, default=50.0)
+    parser.add_argument("--onecycle_final_div_factor", type=float, default=5.0)
 
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--max_iterations", type=int, default=80000)
