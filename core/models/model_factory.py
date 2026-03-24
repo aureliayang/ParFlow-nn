@@ -10,7 +10,411 @@ from core.models import predrnn_pf
 from parflow.tools.io import write_pfb, read_pfb
 from core.utils import preprocess
 from parflow.tools.fs import get_absolute_path
+import shutil
+import multiprocessing as mp
+import sys
+from contextlib import contextmanager
 
+_worker_lib_cache = {}
+
+@contextmanager
+def redirect_fd_to_file(log_path, also_stderr=True):
+    """
+    把当前进程底层 stdout/stderr 临时重定向到文件。
+    这对 ctypes 调进去的 C/Fortran printf / write(*,*) 也通常有效。
+    """
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    stdout_fd = sys.stdout.fileno()
+    stderr_fd = sys.stderr.fileno()
+
+    saved_stdout_fd = os.dup(stdout_fd)
+    saved_stderr_fd = os.dup(stderr_fd) if also_stderr else None
+
+    with open(log_path, "a", buffering=1) as f:
+        try:
+            os.dup2(f.fileno(), stdout_fd)
+            if also_stderr:
+                os.dup2(f.fileno(), stderr_fd)
+            yield
+        finally:
+            sys.stdout.flush()
+            sys.stderr.flush()
+
+            os.dup2(saved_stdout_fd, stdout_fd)
+            os.close(saved_stdout_fd)
+
+            if also_stderr and saved_stderr_fd is not None:
+                os.dup2(saved_stderr_fd, stderr_fd)
+                os.close(saved_stderr_fd)
+
+def get_worker_lib(lib_path):
+    global _worker_lib_cache
+    lib = _worker_lib_cache.get(lib_path)
+    if lib is None:
+        lib = ctypes.CDLL(lib_path)
+        _set_clm_lsm_c_argtypes_local(lib)
+        _worker_lib_cache[lib_path] = lib
+    return lib
+    
+def _set_clm_lsm_c_argtypes_local(lib):
+    lib.clm_lsm_c.argtypes = [
+        POINTER(c_double),  # pressure
+        POINTER(c_double),  # saturation
+        POINTER(c_double),  # evap_trans
+        POINTER(c_double),  # topo
+        POINTER(c_double),  # porosity
+        POINTER(c_double),  # pf_dz_mult
+        c_int,              # istep_pf
+        c_double,           # dt
+        c_double,           # time
+        c_double,           # start_time_pf
+        c_double,           # pdx
+        c_double,           # pdy
+        c_double,           # pdz
+        c_int, c_int, c_int, c_int, c_int, c_int, c_int, c_int, c_int,
+        c_int, c_int, c_int, c_int, c_int, c_int, c_int,
+        POINTER(c_double), POINTER(c_double), POINTER(c_double), POINTER(c_double),
+        POINTER(c_double), POINTER(c_double), POINTER(c_double), POINTER(c_double),
+        POINTER(c_double), POINTER(c_double), POINTER(c_double), POINTER(c_double),
+        POINTER(c_double), POINTER(c_double),
+        POINTER(c_double), POINTER(c_double), POINTER(c_double), POINTER(c_double),
+        POINTER(c_double), POINTER(c_double), POINTER(c_double), POINTER(c_double),
+        POINTER(c_double), POINTER(c_double),
+        POINTER(c_double), POINTER(c_double), POINTER(c_double),
+        c_int, c_int, c_int,
+        c_char_p,
+        c_int,
+        c_int,
+        c_int, c_int, c_int,
+        c_int,
+        c_double, c_double, c_double,
+        c_int, c_int,
+        c_double, c_double, c_double, c_double,
+        POINTER(c_double), POINTER(c_double), POINTER(c_double),
+        c_int,
+        c_int,
+        c_int, c_int, c_int, c_int,
+        c_int, c_int
+    ]
+    lib.clm_lsm_c.restype = None
+
+def run_block_worker_fixed(block_info, task_queue, result_queue):
+    """
+    固定 worker：只负责一个 block，常驻进程。
+    """
+    (
+        lib_path, ix, iy, nx_b, ny_b, nz, clm_nz, nx, ny, general_path, worker_id,
+        alpha_block, n_block, theta_r_block, theta_s_block,
+        topo_block, porosity_block, pf_dz_mult_block
+    ) = block_info
+
+    lib_i = get_worker_lib(lib_path)
+
+    size_2d  = (nx_b + 2) * (ny_b + 2) * 3
+    size_3d  = (nx_b + 2) * (ny_b + 2) * (nz + 2)
+    size_clm = (nx_b + 2) * (ny_b + 2) * (clm_nz + 2)
+    temp_arr_2d  = np.ones(size_2d,  dtype=np.float64)
+    temp_arr_lh  = np.ones(size_2d,  dtype=np.float64)
+    temp_arr_sh  = np.ones(size_2d,  dtype=np.float64)
+    temp_arr_3d  = np.ones(size_3d,  dtype=np.float64)
+    temp_arr_clm = np.ones(size_clm, dtype=np.float64)
+
+
+    press_buf = np.zeros((nz + 2, ny_b + 2, nx_b + 2), dtype=np.float64)
+    satur_buf = np.zeros((nz + 2, ny_b + 2, nx_b + 2), dtype=np.float64)
+
+    sw_buf    = np.zeros((3, ny_b + 2, nx_b + 2), dtype=np.float64)
+    lw_buf    = np.zeros((3, ny_b + 2, nx_b + 2), dtype=np.float64)
+    prcp_buf  = np.zeros((3, ny_b + 2, nx_b + 2), dtype=np.float64)
+    tas_buf   = np.zeros((3, ny_b + 2, nx_b + 2), dtype=np.float64)
+    u_buf     = np.zeros((3, ny_b + 2, nx_b + 2), dtype=np.float64)
+    v_buf     = np.zeros((3, ny_b + 2, nx_b + 2), dtype=np.float64)
+    patm_buf  = np.zeros((3, ny_b + 2, nx_b + 2), dtype=np.float64)
+    qatm_buf  = np.zeros((3, ny_b + 2, nx_b + 2), dtype=np.float64)
+
+    outdir = f"./output_block_{ix}_{iy}/"
+    os.makedirs(outdir, exist_ok=True)
+    outdir_b = outdir.encode()
+
+    fortran_log = os.path.join(outdir, f"fortran_block_{ix}_{iy}.log")
+    open(fortran_log, "w").close()
+
+    cached_day_key = None
+    cached_forcing = None
+
+    topo = np.pad(
+        topo_block,
+        pad_width=((1, 1), (1, 1), (1, 1)),
+        mode='constant',
+        constant_values=0
+    ).astype(np.float64, copy=False).ravel()
+
+    porosity = np.pad(
+        porosity_block,
+        pad_width=((1, 1), (1, 1), (1, 1)),
+        mode='constant',
+        constant_values=0
+    ).astype(np.float64, copy=False).ravel()
+
+    pf_dz_mult = np.pad(
+        pf_dz_mult_block,
+        pad_width=((1, 1), (1, 1), (1, 1)),
+        mode='constant',
+        constant_values=0
+    ).astype(np.float64, copy=False).ravel()
+
+    with redirect_fd_to_file(fortran_log, also_stderr=True):
+        while True:
+            task = task_queue.get()
+            if task is None:
+                break
+                
+            temp_arr_2d.fill(1.0)
+            temp_arr_lh.fill(1.0)
+            temp_arr_sh.fill(1.0)
+            temp_arr_3d.fill(1.0)
+            temp_arr_clm.fill(1.0)
+    
+            (
+                t, hour, start_time_pf,
+                press_block
+            ) = task
+    
+            day_key = t // 24
+    
+            if cached_day_key != day_key:
+                time1 = str(day_key * 24 + 1).zfill(6)
+                time2 = str(day_key * 24 + 24).zfill(6)
+    
+                sw_pf_filename   = general_path + '.DSWR.'  + time1 + '_to_' + time2 + '.pfb'
+                lw_pf_filename   = general_path + '.DLWR.'  + time1 + '_to_' + time2 + '.pfb'
+                prcp_pf_filename = general_path + '.APCP.'  + time1 + '_to_' + time2 + '.pfb'
+                tas_pf_filename  = general_path + '.Temp.'  + time1 + '_to_' + time2 + '.pfb'
+                u_pf_filename    = general_path + '.UGRD.'  + time1 + '_to_' + time2 + '.pfb'
+                v_pf_filename    = general_path + '.VGRD.'  + time1 + '_to_' + time2 + '.pfb'
+                patm_pf_filename = general_path + '.Press.' + time1 + '_to_' + time2 + '.pfb'
+                qatm_pf_filename = general_path + '.SPFH.'  + time1 + '_to_' + time2 + '.pfb'
+    
+                keys_day = {
+                    "x": {"start": ix, "stop": ix + nx_b},
+                    "y": {"start": iy, "stop": iy + ny_b},
+                    "z": {"start": 0, "stop": 24},
+                }
+    
+                cached_forcing = {
+                    "sw": np.ascontiguousarray(
+                        read_pfb(get_absolute_path(sw_pf_filename), keys=keys_day), dtype=np.float64
+                    ),
+                    "lw": np.ascontiguousarray(
+                        read_pfb(get_absolute_path(lw_pf_filename), keys=keys_day), dtype=np.float64
+                    ),
+                    "prcp": np.ascontiguousarray(
+                        read_pfb(get_absolute_path(prcp_pf_filename), keys=keys_day), dtype=np.float64
+                    ),
+                    "tas": np.ascontiguousarray(
+                        read_pfb(get_absolute_path(tas_pf_filename), keys=keys_day), dtype=np.float64
+                    ),
+                    "u": np.ascontiguousarray(
+                        read_pfb(get_absolute_path(u_pf_filename), keys=keys_day), dtype=np.float64
+                    ),
+                    "v": np.ascontiguousarray(
+                        read_pfb(get_absolute_path(v_pf_filename), keys=keys_day), dtype=np.float64
+                    ),
+                    "patm": np.ascontiguousarray(
+                        read_pfb(get_absolute_path(patm_pf_filename), keys=keys_day), dtype=np.float64
+                    ),
+                    "qatm": np.ascontiguousarray(
+                        read_pfb(get_absolute_path(qatm_pf_filename), keys=keys_day), dtype=np.float64
+                    ),
+                }
+    
+                cached_day_key = day_key
+
+            # 按当前 hour 取出一个小时
+            sw_pf_block   = cached_forcing["sw"][hour:hour+1, :, :]
+            lw_pf_block   = cached_forcing["lw"][hour:hour+1, :, :]
+            prcp_pf_block = cached_forcing["prcp"][hour:hour+1, :, :]
+            tas_pf_block  = cached_forcing["tas"][hour:hour+1, :, :]
+            u_pf_block    = cached_forcing["u"][hour:hour+1, :, :]
+            v_pf_block    = cached_forcing["v"][hour:hour+1, :, :]
+            patm_pf_block = cached_forcing["patm"][hour:hour+1, :, :]
+            qatm_pf_block = cached_forcing["qatm"][hour:hour+1, :, :]
+            
+            m = 1.0 - 1.0 / n_block
+            h_neg = np.abs(press_block)
+            vg_expr = (1.0 + (alpha_block * h_neg) ** n_block) ** (-m)
+            Se = np.where(press_block < 0.0, vg_expr, 1.0)
+            satur_block = theta_r_block + (theta_s_block - theta_r_block) * Se
+    
+            press_buf.fill(0.0)
+            press_buf[1:nz+1, 1:ny_b+1, 1:nx_b+1] = press_block
+            press = press_buf.ravel()
+
+            satur_buf.fill(0.0)
+            satur_buf[1:nz+1, 1:ny_b+1, 1:nx_b+1] = satur_block
+            satur = satur_buf.ravel()
+
+            sw_buf.fill(0.0)
+            sw_buf[1:2, 1:ny_b+1, 1:nx_b+1] = sw_pf_block
+            sw_pf = sw_buf.ravel()
+
+            lw_buf.fill(0.0)
+            lw_buf[1:2, 1:ny_b+1, 1:nx_b+1] = lw_pf_block
+            lw_pf = lw_buf.ravel()
+
+            prcp_buf.fill(0.0)
+            prcp_buf[1:2, 1:ny_b+1, 1:nx_b+1] = prcp_pf_block
+            prcp_pf = prcp_buf.ravel()
+
+            tas_buf.fill(0.0)
+            tas_buf[1:2, 1:ny_b+1, 1:nx_b+1] = tas_pf_block
+            tas_pf = tas_buf.ravel()
+
+            u_buf.fill(0.0)
+            u_buf[1:2, 1:ny_b+1, 1:nx_b+1] = u_pf_block
+            u_pf = u_buf.ravel()
+
+            v_buf.fill(0.0)
+            v_buf[1:2, 1:ny_b+1, 1:nx_b+1] = v_pf_block
+            v_pf = v_buf.ravel()
+
+            patm_buf.fill(0.0)
+            patm_buf[1:2, 1:ny_b+1, 1:nx_b+1] = patm_pf_block
+            patm_pf = patm_buf.ravel()
+
+            qatm_buf.fill(0.0)
+            qatm_buf[1:2, 1:ny_b+1, 1:nx_b+1] = qatm_pf_block
+            qatm_pf = qatm_buf.ravel()
+    
+            try:
+                lib_i.clm_lsm_c(
+                    press.ctypes.data_as(POINTER(c_double)),
+                    satur.ctypes.data_as(POINTER(c_double)),
+                    temp_arr_3d.ctypes.data_as(POINTER(c_double)),
+                    topo.ctypes.data_as(POINTER(c_double)),
+                    porosity.ctypes.data_as(POINTER(c_double)),
+                    pf_dz_mult.ctypes.data_as(POINTER(c_double)),
+                    t + 1,
+                    1.0,
+                    float(t),
+                    start_time_pf,
+                    961.72,
+                    961.72,
+                    200.0,
+                    ix, iy, nx_b, ny_b, nz, nx_b + 2, ny_b + 2, nz + 2, 0,
+                    0, 0, 0, 0, nx, ny, worker_id,
+                    sw_pf.ctypes.data_as(POINTER(c_double)),
+                    lw_pf.ctypes.data_as(POINTER(c_double)),
+                    prcp_pf.ctypes.data_as(POINTER(c_double)),
+                    tas_pf.ctypes.data_as(POINTER(c_double)),
+                    u_pf.ctypes.data_as(POINTER(c_double)),
+                    v_pf.ctypes.data_as(POINTER(c_double)),
+                    patm_pf.ctypes.data_as(POINTER(c_double)),
+                    qatm_pf.ctypes.data_as(POINTER(c_double)),
+                    *(temp_arr_2d.ctypes.data_as(POINTER(c_double)) for _ in range(6)),
+                    temp_arr_lh.ctypes.data_as(POINTER(c_double)),
+                    temp_arr_2d.ctypes.data_as(POINTER(c_double)),
+                    temp_arr_sh.ctypes.data_as(POINTER(c_double)),
+                    *(temp_arr_2d.ctypes.data_as(POINTER(c_double)) for _ in range(9)),
+                    temp_arr_clm.ctypes.data_as(POINTER(c_double)),
+                    1, 0, 0,
+                    outdir_b, len(outdir_b),
+                    1,
+                    1, 0, 1,
+                    2,
+                    0.2,
+                    1.0,
+                    0.2,
+                    0, 0,
+                    0.0,
+                    12.0,
+                    20.0,
+                    0.5,
+                    temp_arr_2d.ctypes.data_as(POINTER(c_double)),
+                    temp_arr_clm.ctypes.data_as(POINTER(c_double)),
+                    temp_arr_2d.ctypes.data_as(POINTER(c_double)),
+                    2,
+                    10,
+                    1, 0, 1, 1,
+                    10, 10
+                )
+    
+                evap_trans = np.reshape(
+                    temp_arr_3d, (nz + 2, ny_b + 2, nx_b + 2)
+                ).astype(np.float32)[1:nz+1, 1:ny_b+1, 1:nx_b+1]
+    
+                heat_lh = np.reshape(
+                    temp_arr_lh, (3, ny_b + 2, nx_b + 2)
+                )[1, 1:ny_b+1, 1:nx_b+1]
+    
+                heat_sh = np.reshape(
+                    temp_arr_sh, (3, ny_b + 2, nx_b + 2)
+                )[1, 1:ny_b+1, 1:nx_b+1]
+    
+                temp_gt = np.reshape(
+                    temp_arr_2d, (3, ny_b + 2, nx_b + 2)
+                )[1, 1:ny_b+1, 1:nx_b+1]
+    
+                trans = np.reshape(
+                    temp_arr_3d, (nz + 2, ny_b + 2, nx_b + 2)
+                )[1:nz+1, 1:ny_b+1, 1:nx_b+1]
+    
+                result_queue.put((
+                    ix, iy, nx_b, ny_b,
+                    evap_trans, heat_lh, heat_sh, temp_gt, trans
+                ))
+    
+            except Exception as e:
+                result_queue.put(("ERROR", ix, iy, t, repr(e)))
+                break
+
+def start_fixed_block_workers(
+    blocks, lib_paths, nz, clm_nz, nx, ny, general_path, mp_ctx,
+    alpha_global, n_value_global, theta_r_global, theta_s_global,
+    topo_global, porosity_global, pf_dz_mult_global
+):
+    workers = []
+    task_queues = []
+    result_queues = []
+
+    for worker_id, ((ix, iy, nx_b, ny_b), lib_path) in enumerate(zip(blocks, lib_paths)):
+        task_q = mp_ctx.Queue(maxsize=1)
+        result_q = mp_ctx.Queue(maxsize=1)
+
+        block_info = (
+            lib_path, ix, iy, nx_b, ny_b, nz, clm_nz, nx, ny, general_path, worker_id,
+            np.ascontiguousarray(alpha_global[:, iy:iy+ny_b, ix:ix+nx_b], dtype=np.float64),
+            np.ascontiguousarray(n_value_global[:, iy:iy+ny_b, ix:ix+nx_b], dtype=np.float64),
+            np.ascontiguousarray(theta_r_global[:, iy:iy+ny_b, ix:ix+nx_b], dtype=np.float64),
+            np.ascontiguousarray(theta_s_global[:, iy:iy+ny_b, ix:ix+nx_b], dtype=np.float64),
+            np.ascontiguousarray(topo_global[:, iy:iy+ny_b, ix:ix+nx_b], dtype=np.float64),
+            np.ascontiguousarray(porosity_global[:, iy:iy+ny_b, ix:ix+nx_b], dtype=np.float64),
+            np.ascontiguousarray(pf_dz_mult_global[:, iy:iy+ny_b, ix:ix+nx_b], dtype=np.float64),
+        )
+
+        p = mp_ctx.Process(
+            target=run_block_worker_fixed,
+            args=(block_info, task_q, result_q)
+        )
+        p.start()
+
+        workers.append(p)
+        task_queues.append(task_q)
+        result_queues.append(result_q)
+
+    return workers, task_queues, result_queues
+
+def stop_fixed_block_workers(workers, task_queues):
+    for q in task_queues:
+        q.put(None)
+
+    for p in workers:
+        p.join(timeout=5)
+        if p.is_alive():
+            p.terminate()
+            p.join()
 
 class Model(object):
     def __init__(self, configs):
@@ -324,230 +728,198 @@ class Model(object):
             next_frames = torch.stack(next_frames, dim=1)
 
         return next_frames
-    
-###test_lsm
+
     def test_lsm(self):
-
+    
         self.network.eval()
-
+    
         with torch.no_grad():
-
+    
             res_path = os.path.join(self.configs.gen_frm_dir, 'lsm_result')
             os.makedirs(res_path, exist_ok=True)
-
+    
             nx, ny = self.configs.img_width, self.configs.img_height
             patch_size = self.configs.patch_size
             ss_stride = self.configs.ss_stride_test
-
+    
             ys = list(range(0, ny - patch_size + 1, ss_stride))
             xs = list(range(0, nx - patch_size + 1, ss_stride))
-
+    
             if ys[-1] != ny - patch_size:
                 ys.append(ny - patch_size)
-
+    
             if xs[-1] != nx - patch_size:
                 xs.append(nx - patch_size)
-
+    
             coords_space = [(y, x) for y in ys for x in xs]
-
+    
             # static
             static_inputs_name = os.path.join(self.configs.static_inputs_path, self.configs.static_inputs_filename)
             frame_np = read_pfb(get_absolute_path(static_inputs_name)).astype(np.float32)
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
             mean = frame_im.mean(dim=(3,4), keepdim=True)
-            std = frame_im.std(dim=(3,4), keepdim=True)+1e-8
-            frame_im = (frame_im-mean)/std
+            std = frame_im.std(dim=(3,4), keepdim=True) + 1e-8
+            frame_im = (frame_im - mean) / std
             static_inputs = preprocess.reshape_patch(frame_im, coords_space, patch_size).to(self.configs.device)
-
+    
             mean_p = torch.tensor(self.configs.target_mean, dtype=torch.float32).view(1, 1, -1, 1, 1)
             std_p = torch.tensor(self.configs.target_std, dtype=torch.float32).view(1, 1, -1, 1, 1)
             mean_a = torch.tensor(self.configs.force_mean, dtype=torch.float32).view(1, 1, -1, 1, 1)
             std_a = torch.tensor(self.configs.force_std, dtype=torch.float32).view(1, 1, -1, 1, 1)
-
+    
             targets_prefix = os.path.join(self.configs.targets_path, self.configs.pf_runname + ".out.")
-
+    
             init_cond_name = targets_prefix + 'press.' + str(self.configs.test_start_step - 1).zfill(5) + ".pfb"
             frame_np = read_pfb(get_absolute_path(init_cond_name)).astype(np.float32)
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
-            frame_im = (frame_im-mean_p)/std_p
+            frame_im = (frame_im - mean_p) / std_p
             init_cond = preprocess.reshape_patch(frame_im, coords_space, patch_size).to(self.configs.device)
-
-            #change forcings to static to get the shape?
+    
             batch, _, channels, height, width = static_inputs.shape
-
+    
             next_frames = []
             h_t, c_t, delta_c_list, delta_m_list = self._init_states(batch, height, width)
-
+    
             memory = self.network.memory_encoder(init_cond[:, 0])
             c_t = list(torch.split(self.network.cell_encoder(static_inputs[:, 0]), self.num_hidden, dim=1))
-
+    
             net = init_cond[:, 0]
             net_temp = []
             h_t_temp = []
+    
+            blocks = [
+                (0,   0, 63, 49),
+                (63,  0, 63, 49),
+                (126, 0, 63, 49),
+                (189, 0, 63, 49),
+    
+                (0,   49, 63, 49),
+                (63,  49, 63, 49),
+                (126, 49, 63, 49),
+                (189, 49, 63, 49),
+    
+                (0,   98, 63, 48),
+                (63,  98, 63, 48),
+                (126, 98, 63, 48),
+                (189, 98, 63, 48),
+            ]
 
-            lib_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'libclm_lsm.so'))
-            lib = ctypes.CDLL(lib_path)
-            print("CLM shared library loaded successfully.")
-            self._set_clm_lsm_c_argtypes(lib)
-
-            # 构造虚拟参数（用实际数据替换）
+            base_lib_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'libclm_lsm.so'))
+    
+            lib_paths = []
+            for i in range(len(blocks)):
+                new_path = os.path.abspath(
+                    os.path.join(os.path.dirname(__file__), f'libclm_lsm_block_{i:02d}.so')
+                )
+                if not os.path.exists(new_path):
+                    shutil.copyfile(base_lib_path, new_path)
+                lib_paths.append(new_path)
+    
+            print(f"CLM shared libraries prepared successfully: {len(lib_paths)} instances.")
+    
+            alpha_filename = targets_prefix + 'alpha.pfb'
+            n_filename = targets_prefix + 'n.pfb'
+            theta_s_filename = targets_prefix + 'ssat.pfb'
+            theta_r_filename = targets_prefix + 'sres.pfb'
+            mask_filename = targets_prefix + 'mask.pfb'
+            porosity_filename = targets_prefix + 'porosity.pfb'
+            pf_dz_mult_filename = targets_prefix + 'dz_mult.pfb'
+    
+            alpha_global = np.ascontiguousarray(read_pfb(alpha_filename), dtype=np.float64)
+            n_value_global = np.ascontiguousarray(read_pfb(n_filename), dtype=np.float64)
+            theta_s_global = np.ascontiguousarray(read_pfb(theta_s_filename), dtype=np.float64)
+            theta_r_global = np.ascontiguousarray(read_pfb(theta_r_filename), dtype=np.float64)
+    
+            press_temp_global = np.ascontiguousarray(read_pfb(init_cond_name), dtype=np.float64)
+            topo_global = np.ascontiguousarray(read_pfb(mask_filename), dtype=np.float64)
+            porosity_global = np.ascontiguousarray(read_pfb(porosity_filename), dtype=np.float64)
+            pf_dz_mult_global = np.ascontiguousarray(read_pfb(pf_dz_mult_filename), dtype=np.float64)
+    
             nz, clm_nz = 11, 10
-            size_2d  = (nx+2) * (ny+2) * 3
-            size_3d  = (nx+2) * (ny+2) * (nz+2)
-            size_clm = (nx+2) * (ny+2) * (clm_nz+2)
+            evap_trans_global = np.zeros((1, 1, nz - 1, ny, nx), dtype=np.float32)
+            heat_lh = np.zeros((ny, nx), dtype=np.float64)
+            heat_sh = np.zeros((ny, nx), dtype=np.float64)
+            temp_gt = np.zeros((ny, nx), dtype=np.float64)
+            trans = np.zeros((nz, ny, nx), dtype=np.float64)
+    
+            mp_ctx = mp.get_context("spawn")
 
-            temp_arr_2d = np.ones(size_2d, dtype=np.float64)
-            temp_arr_lh = np.ones(size_2d, dtype=np.float64)
-            temp_arr_sh = np.ones(size_2d, dtype=np.float64)
-            temp_arr_3d = np.ones(size_3d, dtype=np.float64)
-            temp_arr_clm = np.ones(size_clm, dtype=np.float64)
+            general_path = os.path.join(self.configs.lsm_forcings_path, self.configs.lsm_forcings_name)
 
-            alpha_filename, n_filename = targets_prefix+'alpha.pfb', targets_prefix+'n.pfb'
-            theta_s_filename, theta_r_filename = targets_prefix+'ssat.pfb', targets_prefix+'sres.pfb'
-            mask_filename, porosity_filename = targets_prefix+'mask.pfb', targets_prefix+'porosity.pfb'
-            pf_dz_mult_filename = targets_prefix+'dz_mult.pfb'
+            workers, task_queues, result_queues = start_fixed_block_workers(
+                blocks, lib_paths, nz, clm_nz, nx, ny, general_path, mp_ctx,
+                alpha_global, n_value_global, theta_r_global, theta_s_global,
+                topo_global, porosity_global, pf_dz_mult_global
+            )
+            
+            try:
+                for t in range(self.configs.test_start_step - 1, self.configs.test_end_step):
+                    hour = t % 24
+            
+                    evap_trans_global.fill(0.0)
+                    heat_lh.fill(0.0)
+                    heat_sh.fill(0.0)
+                    temp_gt.fill(0.0)
+                    trans.fill(0.0)
+            
+                    # 发任务：每个 block 发给它固定的 worker
+                    for q, (ix, iy, nx_b, ny_b) in zip(task_queues, blocks):
+                        q.put((
+                            t,
+                            hour,
+                            float(self.configs.test_start_step - 1),
+                            np.ascontiguousarray(press_temp_global[:, iy:iy+ny_b, ix:ix+nx_b], dtype=np.float64),
+                        ))
+            
+                    # 收结果
+                    results = []
+                    for rq in result_queues:
+                        item = rq.get()
+                        if isinstance(item, tuple) and len(item) > 0 and item[0] == "ERROR":
+                            _, ix, iy, tt, msg = item
+                            raise RuntimeError(f"worker failed at block=({ix},{iy}) t={tt}: {msg}")
+                        results.append(item)
+            
+                    for ix, iy, nx_b, ny_b, evap_trans, lh_blk, sh_blk, tg_blk, trans_blk in results:
+                        evap_trans_torch = torch.from_numpy(evap_trans).unsqueeze(0).unsqueeze(0)
+                        evap_trans_torch = ((evap_trans_torch - mean_a) / std_a)[:, :, 1:nz, :, :]
+                        evap_trans_global[:, :, :, iy:iy+ny_b, ix:ix+nx_b] = evap_trans_torch.numpy()
+            
+                        heat_lh[iy:iy+ny_b, ix:ix+nx_b] = lh_blk
+                        heat_sh[iy:iy+ny_b, ix:ix+nx_b] = sh_blk
+                        temp_gt[iy:iy+ny_b, ix:ix+nx_b] = tg_blk
+                        trans[:, iy:iy+ny_b, ix:ix+nx_b] = trans_blk
+            
+                    evap_trans_tensor = torch.from_numpy(evap_trans_global)
+                    forcings = preprocess.reshape_patch(evap_trans_tensor, coords_space, patch_size).to(self.configs.device)
+            
+                    # write_pfb(os.path.join(res_path, 'heat_lh.' + str(t+1).zfill(5) + '.pfb'), heat_lh, dist=False)
+                    # write_pfb(os.path.join(res_path, 'heat_sh.' + str(t+1).zfill(5) + '.pfb'), heat_sh, dist=False)
+                    # write_pfb(os.path.join(res_path, 'temp_gt.' + str(t+1).zfill(5) + '.pfb'), temp_gt, dist=False)
+                    # write_pfb(os.path.join(res_path, 'evap.' + str(t+1).zfill(5) + '.pfb'), trans, dist=False)
+            
+                    net, net_temp, h_t_temp, _, h_t, c_t, memory, delta_c_list, delta_m_list = \
+                        self.network(forcings[:, 0], net, net_temp, h_t_temp, h_t, c_t, memory, delta_c_list, delta_m_list)
+                    next_frames.append(net)
+            
+                    press_ = preprocess.reshape_patch_back(
+                        net.unsqueeze(1),
+                        coords_space,
+                        ny,
+                        nx,
+                        patch_size
+                    )
+                    press_ = torch.squeeze((press_.detach().cpu()) * std_p + mean_p).numpy().astype(np.float64)
+                    assert press_.ndim == 3, f"press_ shape wrong: {press_.shape}"
+                    assert press_.shape[1] == ny and press_.shape[2] == nx, f"press_ shape wrong: {press_.shape}"
+                    press_temp_global = np.ascontiguousarray(press_, dtype=np.float64)
 
-            alpha = read_pfb(alpha_filename)
-            n_value = read_pfb(n_filename)
-            theta_s = read_pfb(theta_s_filename)
-            theta_r = read_pfb(theta_r_filename)
-
-            press_temp = read_pfb(init_cond_name)
-            topo = read_pfb(mask_filename)
-            porosity = read_pfb(porosity_filename)
-            pf_dz_mult = read_pfb(pf_dz_mult_filename)
-
-            topo = np.pad(topo, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0).flatten()
-            porosity = np.pad(porosity, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0).flatten()
-            pf_dz_mult = np.pad(pf_dz_mult, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0).flatten()
-
-            for t in range(self.configs.test_start_step - 1, self.configs.test_end_step):
-
-                #this t is that in parflow, t+1 is that in colm and it is the real time
-                # read 8 forcings, cal saturation
-                hour = t % 24
-                time1 = str(t // 24 * 24 + 1).zfill(6) 
-                time2 = str(t // 24 * 24 + 24).zfill(6) 
-
-                general_path = os.path.join(self.configs.lsm_forcings_path, self.configs.lsm_forcings_name)
-                sw_pf_filename = general_path +'.DSWR.' + time1 + '_to_' + time2 + '.pfb'
-                lw_pf_filename = general_path +'.DLWR.' + time1 + '_to_' + time2 + '.pfb'
-                prcp_pf_filename = general_path +'.APCP.' + time1 + '_to_' + time2 + '.pfb'
-                tas_pf_filename = general_path +'.Temp.' + time1 + '_to_' + time2 + '.pfb'
-                u_pf_filename = general_path +'.UGRD.' + time1 + '_to_' + time2 + '.pfb'
-                v_pf_filename = general_path +'.VGRD.' + time1 + '_to_' + time2 + '.pfb'
-                patm_pf_filename = general_path +'.Press.' + time1 + '_to_' + time2 + '.pfb'
-                qatm_pf_filename = general_path +'.SPFH.' + time1 + '_to_' + time2 + '.pfb'
-
-                # read forcings and pad dim
-                pf_vars = {'sw_pf': sw_pf_filename, 'lw_pf': lw_pf_filename, 'prcp_pf': prcp_pf_filename, 'tas_pf': tas_pf_filename,
-                           'u_pf': u_pf_filename, 'v_pf': v_pf_filename, 'patm_pf': patm_pf_filename, 'qatm_pf': qatm_pf_filename}
-                variables = {}
-                for var_name, filename in pf_vars.items():
-                    data = read_pfb(get_absolute_path(filename))[hour, :, :]
-                    data = np.expand_dims(data, axis=0)
-                    variables[var_name] = data
-                sw_pf, lw_pf, prcp_pf, tas_pf = variables['sw_pf'], variables['lw_pf'], variables['prcp_pf'], variables['tas_pf']
-                u_pf, v_pf, patm_pf, qatm_pf = variables['u_pf'], variables['v_pf'], variables['patm_pf'], variables['qatm_pf']
-
-                # cal saturation
-                satur = self._vg_saturation(press_temp, alpha, n_value, theta_r, theta_s)
-                press = np.pad(press_temp, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0).flatten()
-
-                # pad ghost cells and flatten
-                variables = {'satur': satur, 'sw_pf': sw_pf, 'lw_pf': lw_pf, 'prcp_pf': prcp_pf,
-                             'tas_pf': tas_pf, 'u_pf': u_pf, 'v_pf': v_pf, 'patm_pf': patm_pf, 'qatm_pf': qatm_pf}
-                for name, arr in variables.items():
-                    arr = np.pad(arr, pad_width=((1, 1), (1, 1), (1, 1)), mode='constant', constant_values=0).flatten()
-                    variables[name] = arr
-                satur = variables['satur']
-                sw_pf, lw_pf, prcp_pf, tas_pf = variables['sw_pf'], variables['lw_pf'], variables['prcp_pf'], variables['tas_pf']
-                u_pf, v_pf, patm_pf, qatm_pf = variables['u_pf'], variables['v_pf'], variables['patm_pf'], variables['qatm_pf']
-                
-                # call lsm
-                lib.clm_lsm_c(
-                    press.ctypes.data_as(POINTER(c_double)),        # pressure
-                    satur.ctypes.data_as(POINTER(c_double)),        # saturation
-                    temp_arr_3d.ctypes.data_as(POINTER(c_double)),  # evap_trans
-                    topo.ctypes.data_as(POINTER(c_double)),         # topo
-                    porosity.ctypes.data_as(POINTER(c_double)),     # porosity
-                    pf_dz_mult.ctypes.data_as(POINTER(c_double)),   # pf_dz_mult
-                    t + 1,                                  # istep_pf
-                    1.0,                                    # dt
-                    t,                                      # time ？？？
-                    self.configs.test_start_step - 1.,  # start_time_pf
-                    961.72,                   # pdx
-                    961.72,                   # pdy
-                    200.,                     # pdz
-                    0, 0, nx, ny, nz, nx+2, ny+2, nz+2, 0,         # ix, iy, nx, ny, nz, nx_f, ny_f, nz_f, nz_rz
-                    0, 0, 0, 0, nx, ny, 0,                         # ip,npp,npq,npr,gnx,gny,rank
-                    sw_pf.ctypes.data_as(POINTER(c_double)),
-                    lw_pf.ctypes.data_as(POINTER(c_double)),
-                    prcp_pf.ctypes.data_as(POINTER(c_double)),
-                    tas_pf.ctypes.data_as(POINTER(c_double)),
-                    u_pf.ctypes.data_as(POINTER(c_double)),
-                    v_pf.ctypes.data_as(POINTER(c_double)),
-                    patm_pf.ctypes.data_as(POINTER(c_double)),
-                    qatm_pf.ctypes.data_as(POINTER(c_double)),
-                    *(temp_arr_2d.ctypes.data_as(POINTER(c_double)) for _ in range(6)),  # 所有 double* 参数
-                    temp_arr_lh.ctypes.data_as(POINTER(c_double)),
-                    temp_arr_2d.ctypes.data_as(POINTER(c_double)),
-                    temp_arr_sh.ctypes.data_as(POINTER(c_double)),
-                    *(temp_arr_2d.ctypes.data_as(POINTER(c_double)) for _ in range(9)),
-                    temp_arr_clm.ctypes.data_as(POINTER(c_double)),
-                    1, 0, 0,                                 # clm_dump_interval####, clm_1d_out, clm_forc_veg
-                    b"./output/", 9,                         # clm_output_dir, clm_output_dir_length
-                    1,                                       # clm_bin_output_dir
-                    1, 0, 1,                                 # write_CLM_binary, slope_accounting_CLM, beta_typepf
-                    2,                                       # veg_water_stress_typepf
-                    0.2,                                     # wilting_pointpf
-                    1.0,                                     # field_capacitypf
-                    0.2,                                     # res_satpf
-                    0, 0,                                    # irr_typepf, irr_cyclepf
-                    0.,                                      # irr_ratepf
-                    12.,                                     # irr_startpf
-                    20.,                                     # irr_stoppf
-                    0.5,                                     # irr_thresholdpf
-                    temp_arr_2d.ctypes.data_as(POINTER(c_double)),    # qirr_pf
-                    temp_arr_clm.ctypes.data_as(POINTER(c_double)),   # qirr_inst_pf
-                    temp_arr_2d.ctypes.data_as(POINTER(c_double)),    # irr_flag_pf
-                    2,                                       # irr_thresholdtypepf
-                    10,                                      # soi_z ####
-                    1, 0, 1, 1,                              # clm_next, clm_write_logs, clm_last_rst, clm_daily_rst
-                    10, 10                                   # pf_nlevsoi, pf_nlevlak ####
-                )
-
-                evap_trans = np.reshape(temp_arr_3d,(nz+2,ny+2,nx+2)).astype(np.float32)[1:nz+1,1:ny+1,1:nx+1]
-                evap_trans = torch.from_numpy(evap_trans).unsqueeze(0).unsqueeze(0)
-                evap_trans = ((evap_trans - mean_a) / std_a)[:, :, 1:nz, :, :]
-                forcings = preprocess.reshape_patch(evap_trans, coords_space, patch_size).to(self.configs.device)
-
-                heat_lh = np.reshape(temp_arr_lh, (3, ny+2, nx+2))[1, 1:ny+1, 1:nx+1]
-                heat_sh = np.reshape(temp_arr_sh, (3, ny+2, nx+2))[1, 1:ny+1, 1:nx+1]
-                temp_gt = np.reshape(temp_arr_2d, (3, ny+2, nx+2))[1, 1:ny+1, 1:nx+1]
-                trans = np.reshape(temp_arr_3d, (nz+2, ny+2, nx+2))[1:nz+1, 1:ny+1, 1:nx+1]
-
-                write_pfb(os.path.join(res_path, 'heat_lh.' + str(t+1).zfill(5) + '.pfb'), heat_lh, dist=False)
-                write_pfb(os.path.join(res_path, 'heat_sh.' + str(t+1).zfill(5) + '.pfb'), heat_sh, dist=False)
-                write_pfb(os.path.join(res_path, 'temp_gt.' + str(t+1).zfill(5) + '.pfb'), temp_gt, dist=False)
-                write_pfb(os.path.join(res_path, 'evap.' + str(t+1).zfill(5) + '.pfb'), trans, dist=False)
-
-                net, net_temp, h_t_temp, _, h_t, c_t, memory, delta_c_list, delta_m_list = \
-                self.network(forcings[:,0], net, net_temp, h_t_temp, h_t, c_t, memory, delta_c_list, delta_m_list)
-                next_frames.append(net)
-
-                press_ = preprocess.reshape_patch_back(
-                    net.unsqueeze(1),   # [num_patch, 1, C, patch, patch]
-                    coords_space,
-                    ny,
-                    nx,
-                    patch_size
-                )
-                press_ = torch.squeeze((press_.detach().cpu()) * std_p + mean_p).numpy().astype(np.float64)
-                assert press_.ndim == 3, f"press_ shape wrong: {press_.shape}"
-                assert press_.shape[1] == ny and press_.shape[2] == nx, f"press_ shape wrong: {press_.shape}"
-                press_temp = press_
-
+                    if ((t + 1) % 24 == 0) or (t == self.configs.test_start_step - 1):
+                        print(f"[LSM] finished timestep {t+1}/{self.configs.test_end_step}", flush=True)
+            
+            finally:
+                stop_fixed_block_workers(workers, task_queues)
+    
             next_frames = torch.stack(next_frames, dim=1)
             next_frames = preprocess.reshape_patch_back(
                 next_frames,
@@ -556,63 +928,5 @@ class Model(object):
                 nx,
                 patch_size
             )
-        # return next_frames.detach().cpu().numpy()
+    
         return next_frames, mean_p, std_p
-    
-    def _vg_saturation(self, h, alpha, n, theta_r, theta_s):
-        m = 1 - 1 / n
-        Se = np.ones_like(h)  # 初始化为全1
-        h_neg = np.abs(h)
-        
-        # 在负压头处更新 Se，其他保持1
-        vg_expr = (1 + (alpha * h_neg) ** n) ** (-m)
-        Se = np.where(h < 0, vg_expr, Se)
-
-        theta = theta_r + (theta_s - theta_r) * Se
-        return theta
-    
-    def _set_clm_lsm_c_argtypes(self, lib):
-        # 定义 clm_lsm_c 函数原型
-        lib.clm_lsm_c.argtypes = [
-            POINTER(c_double),  # pressure
-            POINTER(c_double),  # saturation
-            POINTER(c_double),  # evap_trans
-            POINTER(c_double),  # topo
-            POINTER(c_double),  # porosity
-            POINTER(c_double),  # pf_dz_mult
-            c_int,              # istep_pf
-            c_double,           # dt
-            c_double,           # time
-            c_double,           # start_time_pf
-            c_double,           # pdx
-            c_double,           # pdy
-            c_double,           # pdz
-            c_int, c_int, c_int, c_int, c_int, c_int, c_int, c_int, c_int, # ix~nz_rz
-            c_int, c_int, c_int, c_int, c_int, c_int, c_int,               # ip~rank
-            POINTER(c_double), POINTER(c_double), POINTER(c_double), POINTER(c_double),  # sw_pf~tas_pf
-            POINTER(c_double), POINTER(c_double), POINTER(c_double), POINTER(c_double),  # u_pf~qatm_pf
-            POINTER(c_double), POINTER(c_double), POINTER(c_double), POINTER(c_double),  # lai_pf~slope_y_pf
-            POINTER(c_double), POINTER(c_double),
-            POINTER(c_double), POINTER(c_double), POINTER(c_double), POINTER(c_double),  # eflx_lh_pf~eflx_grnd_pf
-            POINTER(c_double), POINTER(c_double), POINTER(c_double), POINTER(c_double),  # qflx系列
-            POINTER(c_double), POINTER(c_double),                                        
-            POINTER(c_double), POINTER(c_double), POINTER(c_double),                     # swe_pf, t_g_pf, t_soil_pf                  
-            c_int, c_int, c_int,            # clm_dump_interval, clm_1d_out, clm_forc_veg
-            c_char_p,                       # clm_output_dir
-            c_int,                          # clm_output_dir_length
-            c_int,                          # clm_bin_output_dir
-            c_int, c_int, c_int,            # write_CLM_binary, slope_accounting_CLM, beta_typepf
-            c_int,                          # veg_water_stress_typepf
-            c_double, c_double, c_double,   # wilting_pointpf, field_capacitypf, res_satpf
-            c_int, c_int,                   # irr_typepf, irr_cyclepf
-            c_double, c_double, c_double, c_double,  # irr_ratepf~irr_thresholdpf
-            POINTER(c_double), POINTER(c_double),  # qirr_pf, qirr_inst_pf
-            POINTER(c_double), # irr_flag_pf
-            c_int,  # irr_thresholdtypepf
-            c_int,  # soi_z
-            c_int, c_int, c_int, c_int,  # clm_next~clm_daily_rst
-            c_int, c_int  # pf_nlevsoi, pf_nlevlak
-        ]
-
-        # 返回值类型为 None
-        lib.clm_lsm_c.restype = None

@@ -1,8 +1,8 @@
 # export CUDA_VISIBLE_DEVICES=0
 cd ..
 python -u run.py \
-    --is_training 1 \
-    --is_test_lsm 0 \
+    --is_training 0 \
+    --is_test_lsm 1 \
     --seed 420 \
     --pf_runname unname_test \
     --save_dir checkpoints/onecycle_kernel4 \
@@ -10,6 +10,8 @@ python -u run.py \
     --norm_file /data/aurelia-data/workspace/clm_call/stats_press_evap.yaml \
     --static_inputs_path /data/aurelia-data/workspace/clm_call \
     --static_inputs_filename static_inputs_combined46.pfb \
+    --forcings_path /data/aurelia-data/workspace/beijiang/outputs2 \
+    --targets_path /data/aurelia-data/workspace/beijiang/outputs2 \
     --forcings_paths /data/aurelia-data/workspace/beijiang/outputs2 /data/aurelia-data/workspace/beijiang/outputs2020 \
     --targets_paths /data/aurelia-data/workspace/beijiang/outputs2 /data/aurelia-data/workspace/beijiang/outputs2020 \
     --init_cond_channel 11 \
@@ -19,8 +21,8 @@ python -u run.py \
     --attn_mode none \
     --training_start_step 1 \
     --training_end_step 17520 \
-    --test_start_step 15001 \
-    --test_end_step 17520 \
+    --test_start_step 1 \
+    --test_end_step 720 \
     --img_height 146 \
     --img_width 252 \
     --patch_size 16 \
@@ -37,8 +39,8 @@ python -u run.py \
     --max_iterations 80000 \
     --display_interval 100 \
     --test_interval 1000 \
-    --snapshot_interval 5000
-    # --pretrained_model /data/aurelia-data/workspace/ParFlow-nn/checkpoints_none/pfnn_predrnn/model.ckpt-80000 \
-    # --lsm_forcings_path /data/aurelia-data/workspace/E5L \
-    # --lsm_forcings_name E5L 
+    --snapshot_interval 5000 \
+    --pretrained_model /home/aurelia/data/workspace/ParFlow-nn/checkpoints/onecycle_kernel4/model.ckpt-70000 \
+    --lsm_forcings_path /home/aurelia/data/workspace/wateryear_2019 \
+    --lsm_forcings_name E5L 
    
