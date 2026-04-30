@@ -13,13 +13,14 @@ We will update this repository promptly based on any useful feedback you provide
 **CoLM_nlfile.nml**: CoLM configuration file specifying the simulation period.  
 **CoLM_readin.dat**: CoLM input file containing soil properties and land cover information for the modeling domain.  
 **snicar_par.dat**: CoLM input file; keep this file in the current directory.  
-**other_inputs**:  
-- **ERA5_forcings**: 48-hour ERA5-Land meteorological forcing data for the test case.  
-- **restart_files**: Required for hot-start initialization at the end of water year 2020 (WY2020).  
-- **trained_model**: Pretrained surrogate model used in the hybrid system.  
-- **static_inputs_combined46.pfb**: Static input file containing 46 land surface attributes.  
-- **stats_press_evap2.yaml**: Mean and standard deviation for exchange fluxes and pressure head.  
-**pfnn_script**:  
+**other_inputs**:
+- **ERA5_forcings**: 48-hour ERA5-Land meteorological forcing data for the test case.
+- **restart_files**: Required for hot-start initialization at the end of water year 2020 (WY2020).
+- **trained_model**: Pretrained surrogate model used in the hybrid system.
+- **static_inputs_combined46.pfb**: Static input file containing 46 land surface attributes.
+- **stats_press_evap2.yaml**: Mean and standard deviation for exchange fluxes and pressure head.
+
+**pfnn_script**:
 - **predrnn_pfnn.sh**: Main execution script. Once all inputs are prepared, run `sh predrnn_pfnn.sh`.
 
 ## Path Configuration Notes
