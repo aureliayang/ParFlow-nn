@@ -1,0 +1,629 @@
+gpu you are using: 
+name, memory.total [MiB], memory.free [MiB]
+NVIDIA A100-SXM4-80GB, 81920 MiB, 63497 MiB
+NVIDIA A100-SXM4-80GB, 81920 MiB, 79259 MiB
+NVIDIA A100-SXM4-80GB, 81920 MiB, 81152 MiB
+NVIDIA A100-SXM4-80GB, 81920 MiB, 64399 MiB
+2026-03-30 21:41:50
+
+===== Config =====
+act_channel              : 10
+attn_mode                : none
+batch_size               : 16
+dataset_name             : pfnn
+decouple_beta            : 1.0
+device                   : cuda
+display_interval         : 100
+dx                       : 961.72
+dy                       : 961.72
+dz                       : [100.0, 1.137, 0.9133, 0.5539, 0.336, 0.2038, 0.1236, 0.0749, 0.0455, 0.0276, 0.0175]
+filter_size              : 3
+force_mean               : [0.0, -1.730130302365114e-06, -2.689036723936295e-06, -9.087116277196514e-06, -2.634041954085325e-05, -6.465501005093232e-05, -0.00012594915394998382, -0.00018084170447680954, -0.0001896607463949254, -0.00014594463219248544, 0.009152244909346078]
+force_std                : [0.0, 3.2490522532624306e-06, 5.193128207611772e-06, 1.7771253623901703e-05, 5.170045462615904e-05, 0.00012562679257568568, 0.00024194813079695196, 0.000355384271260159, 0.0003945913043868001, 0.0003194786333786253, 0.0327106071565356]
+forcings_path            : /data/share/aurelia-share/beijiang/outputs2021
+forcings_paths           : ['/data/share/aurelia-share/beijiang/outputs2019_4', '/data/share/aurelia-share/beijiang/outputs2020', '/data/share/aurelia-share/beijiang/outputs2021_1']
+gen_frm_dir              : results/onecycle_kernel31
+grad_beta                : 0.1
+img_channel              : 11
+img_height               : 146
+img_width                : 252
+init_cond_channel        : 11
+input_length_test        : 120
+input_length_train       : 120
+is_test_lsm              : 1
+is_training              : 0
+lr                       : 0.003
+lr_mode                  : onecycle
+lsm_forcings_name        : E5L
+lsm_forcings_path        : /home/aurelia/data/workspace/wateryear_2021
+max_iterations           : 80000
+max_lr                   : 0.002
+model_name               : predrnn_pf
+norm_file                : /data/aurelia-data/workspace/clm_call/stats_press_evap2.yaml
+num_hidden               : 16,16
+onecycle_div_factor      : 5.0
+onecycle_final_div_factor: 5.0
+onecycle_pct_start       : 0.3
+patch_size               : 16
+pf_runname               : unname_test
+pretrained_model         : /home/aurelia/data/workspace/ParFlow-nn/checkpoints/onecycle_kernel4/model.ckpt-80000
+save_dir                 : checkpoints/onecycle_kernel31
+seed                     : 420
+snapshot_interval        : 5000
+ss_stride_test           : 16
+ss_stride_train          : 16
+st_stride_test           : 120
+st_stride_train          : 120
+static_channel           : 46
+static_inputs_filename   : static_inputs_combined46.pfb
+static_inputs_path       : /data/aurelia-data/workspace/clm_call
+storage_beta             : 0.0
+stride                   : 1
+target_mean              : [51.15771442327475, 1.9901359384614106, 0.9969431153333467, 0.30271274617262545, -0.09766660871488833, -0.3376971944076329, -0.48454979234940315, -0.571809228932054, -0.6240434436274384, -0.655696385060043, -0.6755599350804194]
+target_std               : [9.875888416188547, 0.9415728408747881, 0.8603698324801069, 0.7811285934017199, 0.7137407262068162, 0.6795988662748703, 0.6701018040620506, 0.6642416094104932, 0.6619457657601838, 0.661023627098424, 0.6608986160661409]
+targets_path             : /data/share/aurelia-share/beijiang/outputs2021
+targets_paths            : ['/data/share/aurelia-share/beijiang/outputs2019_4', '/data/share/aurelia-share/beijiang/outputs2020', '/data/share/aurelia-share/beijiang/outputs2021_1']
+test_end_step            : 8760
+test_interval            : 1000
+test_start_step          : 1
+training_end_step        : 17520
+training_start_step      : 1
+==================
+
+Random: 0.026343380459525556
+Numpy: [0.31564591 0.45303068 0.26698226 0.10892818 0.86816648]
+Torch CPU: tensor([0.8054, 0.1990, 0.9759])
+Torch CUDA: tensor([0.9378, 0.8136, 0.2027], device='cuda:0')
+Initializing models
+/home/aurelia/anaconda3/envs/myenv/lib/python3.12/site-packages/networkx/utils/backends.py:102: RuntimeWarning: networkx backend name is not a valid identifier: 'nx-loopback'. Ignoring.
+  backends = _get_backends("networkx.backends")
+Total parameters: 85,216
+load model: /home/aurelia/data/workspace/ParFlow-nn/checkpoints/onecycle_kernel4/model.ckpt-80000
+CLM shared libraries prepared successfully: 12 instances.
+[LSM] finished timestep 1/8760
+[LSM] finished timestep 24/8760
+[LSM] finished timestep 48/8760
+[LSM] finished timestep 72/8760
+[LSM] finished timestep 96/8760
+[LSM] finished timestep 120/8760
+[LSM] finished timestep 144/8760
+[LSM] finished timestep 168/8760
+[LSM] finished timestep 192/8760
+[LSM] finished timestep 216/8760
+[LSM] finished timestep 240/8760
+[LSM] finished timestep 264/8760
+[LSM] finished timestep 288/8760
+[LSM] finished timestep 312/8760
+[LSM] finished timestep 336/8760
+[LSM] finished timestep 360/8760
+[LSM] finished timestep 384/8760
+[LSM] finished timestep 408/8760
+[LSM] finished timestep 432/8760
+[LSM] finished timestep 456/8760
+[LSM] finished timestep 480/8760
+[LSM] finished timestep 504/8760
+[LSM] finished timestep 528/8760
+[LSM] finished timestep 552/8760
+[LSM] finished timestep 576/8760
+[LSM] finished timestep 600/8760
+[LSM] finished timestep 624/8760
+[LSM] finished timestep 648/8760
+[LSM] finished timestep 672/8760
+[LSM] finished timestep 696/8760
+[LSM] finished timestep 720/8760
+[LSM] finished timestep 744/8760
+[LSM] finished timestep 768/8760
+[LSM] finished timestep 792/8760
+[LSM] finished timestep 816/8760
+[LSM] finished timestep 840/8760
+[LSM] finished timestep 864/8760
+[LSM] finished timestep 888/8760
+[LSM] finished timestep 912/8760
+[LSM] finished timestep 936/8760
+[LSM] finished timestep 960/8760
+[LSM] finished timestep 984/8760
+[LSM] finished timestep 1008/8760
+[LSM] finished timestep 1032/8760
+[LSM] finished timestep 1056/8760
+[LSM] finished timestep 1080/8760
+[LSM] finished timestep 1104/8760
+[LSM] finished timestep 1128/8760
+[LSM] finished timestep 1152/8760
+[LSM] finished timestep 1176/8760
+[LSM] finished timestep 1200/8760
+[LSM] finished timestep 1224/8760
+[LSM] finished timestep 1248/8760
+[LSM] finished timestep 1272/8760
+[LSM] finished timestep 1296/8760
+[LSM] finished timestep 1320/8760
+[LSM] finished timestep 1344/8760
+[LSM] finished timestep 1368/8760
+[LSM] finished timestep 1392/8760
+[LSM] finished timestep 1416/8760
+[LSM] finished timestep 1440/8760
+[LSM] finished timestep 1464/8760
+[LSM] finished timestep 1488/8760
+[LSM] finished timestep 1512/8760
+[LSM] finished timestep 1536/8760
+[LSM] finished timestep 1560/8760
+[LSM] finished timestep 1584/8760
+[LSM] finished timestep 1608/8760
+[LSM] finished timestep 1632/8760
+[LSM] finished timestep 1656/8760
+[LSM] finished timestep 1680/8760
+[LSM] finished timestep 1704/8760
+[LSM] finished timestep 1728/8760
+[LSM] finished timestep 1752/8760
+[LSM] finished timestep 1776/8760
+[LSM] finished timestep 1800/8760
+[LSM] finished timestep 1824/8760
+[LSM] finished timestep 1848/8760
+[LSM] finished timestep 1872/8760
+[LSM] finished timestep 1896/8760
+[LSM] finished timestep 1920/8760
+[LSM] finished timestep 1944/8760
+[LSM] finished timestep 1968/8760
+[LSM] finished timestep 1992/8760
+[LSM] finished timestep 2016/8760
+[LSM] finished timestep 2040/8760
+[LSM] finished timestep 2064/8760
+[LSM] finished timestep 2088/8760
+[LSM] finished timestep 2112/8760
+[LSM] finished timestep 2136/8760
+[LSM] finished timestep 2160/8760
+[LSM] finished timestep 2184/8760
+[LSM] finished timestep 2208/8760
+[LSM] finished timestep 2232/8760
+[LSM] finished timestep 2256/8760
+[LSM] finished timestep 2280/8760
+[LSM] finished timestep 2304/8760
+[LSM] finished timestep 2328/8760
+[LSM] finished timestep 2352/8760
+[LSM] finished timestep 2376/8760
+[LSM] finished timestep 2400/8760
+[LSM] finished timestep 2424/8760
+[LSM] finished timestep 2448/8760
+[LSM] finished timestep 2472/8760
+[LSM] finished timestep 2496/8760
+[LSM] finished timestep 2520/8760
+[LSM] finished timestep 2544/8760
+[LSM] finished timestep 2568/8760
+[LSM] finished timestep 2592/8760
+[LSM] finished timestep 2616/8760
+[LSM] finished timestep 2640/8760
+[LSM] finished timestep 2664/8760
+[LSM] finished timestep 2688/8760
+[LSM] finished timestep 2712/8760
+[LSM] finished timestep 2736/8760
+[LSM] finished timestep 2760/8760
+[LSM] finished timestep 2784/8760
+[LSM] finished timestep 2808/8760
+[LSM] finished timestep 2832/8760
+[LSM] finished timestep 2856/8760
+[LSM] finished timestep 2880/8760
+[LSM] finished timestep 2904/8760
+[LSM] finished timestep 2928/8760
+[LSM] finished timestep 2952/8760
+[LSM] finished timestep 2976/8760
+[LSM] finished timestep 3000/8760
+[LSM] finished timestep 3024/8760
+[LSM] finished timestep 3048/8760
+[LSM] finished timestep 3072/8760
+[LSM] finished timestep 3096/8760
+[LSM] finished timestep 3120/8760
+[LSM] finished timestep 3144/8760
+[LSM] finished timestep 3168/8760
+[LSM] finished timestep 3192/8760
+[LSM] finished timestep 3216/8760
+[LSM] finished timestep 3240/8760
+[LSM] finished timestep 3264/8760
+[LSM] finished timestep 3288/8760
+[LSM] finished timestep 3312/8760
+[LSM] finished timestep 3336/8760
+[LSM] finished timestep 3360/8760
+[LSM] finished timestep 3384/8760
+[LSM] finished timestep 3408/8760
+[LSM] finished timestep 3432/8760
+[LSM] finished timestep 3456/8760
+[LSM] finished timestep 3480/8760
+[LSM] finished timestep 3504/8760
+[LSM] finished timestep 3528/8760
+[LSM] finished timestep 3552/8760
+[LSM] finished timestep 3576/8760
+[LSM] finished timestep 3600/8760
+[LSM] finished timestep 3624/8760
+[LSM] finished timestep 3648/8760
+[LSM] finished timestep 3672/8760
+[LSM] finished timestep 3696/8760
+[LSM] finished timestep 3720/8760
+[LSM] finished timestep 3744/8760
+[LSM] finished timestep 3768/8760
+[LSM] finished timestep 3792/8760
+[LSM] finished timestep 3816/8760
+[LSM] finished timestep 3840/8760
+[LSM] finished timestep 3864/8760
+[LSM] finished timestep 3888/8760
+[LSM] finished timestep 3912/8760
+[LSM] finished timestep 3936/8760
+[LSM] finished timestep 3960/8760
+[LSM] finished timestep 3984/8760
+[LSM] finished timestep 4008/8760
+[LSM] finished timestep 4032/8760
+[LSM] finished timestep 4056/8760
+[LSM] finished timestep 4080/8760
+[LSM] finished timestep 4104/8760
+[LSM] finished timestep 4128/8760
+[LSM] finished timestep 4152/8760
+[LSM] finished timestep 4176/8760
+[LSM] finished timestep 4200/8760
+[LSM] finished timestep 4224/8760
+[LSM] finished timestep 4248/8760
+[LSM] finished timestep 4272/8760
+[LSM] finished timestep 4296/8760
+[LSM] finished timestep 4320/8760
+[LSM] finished timestep 4344/8760
+[LSM] finished timestep 4368/8760
+[LSM] finished timestep 4392/8760
+[LSM] finished timestep 4416/8760
+[LSM] finished timestep 4440/8760
+[LSM] finished timestep 4464/8760
+[LSM] finished timestep 4488/8760
+[LSM] finished timestep 4512/8760
+[LSM] finished timestep 4536/8760
+[LSM] finished timestep 4560/8760
+[LSM] finished timestep 4584/8760
+[LSM] finished timestep 4608/8760
+[LSM] finished timestep 4632/8760
+[LSM] finished timestep 4656/8760
+[LSM] finished timestep 4680/8760
+[LSM] finished timestep 4704/8760
+[LSM] finished timestep 4728/8760
+[LSM] finished timestep 4752/8760
+[LSM] finished timestep 4776/8760
+[LSM] finished timestep 4800/8760
+[LSM] finished timestep 4824/8760
+[LSM] finished timestep 4848/8760
+[LSM] finished timestep 4872/8760
+[LSM] finished timestep 4896/8760
+[LSM] finished timestep 4920/8760
+[LSM] finished timestep 4944/8760
+[LSM] finished timestep 4968/8760
+[LSM] finished timestep 4992/8760
+[LSM] finished timestep 5016/8760
+[LSM] finished timestep 5040/8760
+[LSM] finished timestep 5064/8760
+[LSM] finished timestep 5088/8760
+[LSM] finished timestep 5112/8760
+[LSM] finished timestep 5136/8760
+[LSM] finished timestep 5160/8760
+[LSM] finished timestep 5184/8760
+[LSM] finished timestep 5208/8760
+[LSM] finished timestep 5232/8760
+[LSM] finished timestep 5256/8760
+[LSM] finished timestep 5280/8760
+[LSM] finished timestep 5304/8760
+[LSM] finished timestep 5328/8760
+[LSM] finished timestep 5352/8760
+[LSM] finished timestep 5376/8760
+[LSM] finished timestep 5400/8760
+[LSM] finished timestep 5424/8760
+[LSM] finished timestep 5448/8760
+[LSM] finished timestep 5472/8760
+[LSM] finished timestep 5496/8760
+[LSM] finished timestep 5520/8760
+[LSM] finished timestep 5544/8760
+[LSM] finished timestep 5568/8760
+[LSM] finished timestep 5592/8760
+[LSM] finished timestep 5616/8760
+[LSM] finished timestep 5640/8760
+[LSM] finished timestep 5664/8760
+[LSM] finished timestep 5688/8760
+[LSM] finished timestep 5712/8760
+[LSM] finished timestep 5736/8760
+[LSM] finished timestep 5760/8760
+[LSM] finished timestep 5784/8760
+[LSM] finished timestep 5808/8760
+[LSM] finished timestep 5832/8760
+[LSM] finished timestep 5856/8760
+[LSM] finished timestep 5880/8760
+[LSM] finished timestep 5904/8760
+[LSM] finished timestep 5928/8760
+[LSM] finished timestep 5952/8760
+[LSM] finished timestep 5976/8760
+[LSM] finished timestep 6000/8760
+[LSM] finished timestep 6024/8760
+[LSM] finished timestep 6048/8760
+[LSM] finished timestep 6072/8760
+[LSM] finished timestep 6096/8760
+[LSM] finished timestep 6120/8760
+[LSM] finished timestep 6144/8760
+[LSM] finished timestep 6168/8760
+[LSM] finished timestep 6192/8760
+[LSM] finished timestep 6216/8760
+[LSM] finished timestep 6240/8760
+[LSM] finished timestep 6264/8760
+[LSM] finished timestep 6288/8760
+[LSM] finished timestep 6312/8760
+[LSM] finished timestep 6336/8760
+[LSM] finished timestep 6360/8760
+[LSM] finished timestep 6384/8760
+[LSM] finished timestep 6408/8760
+[LSM] finished timestep 6432/8760
+[LSM] finished timestep 6456/8760
+[LSM] finished timestep 6480/8760
+[LSM] finished timestep 6504/8760
+[LSM] finished timestep 6528/8760
+[LSM] finished timestep 6552/8760
+[LSM] finished timestep 6576/8760
+[LSM] finished timestep 6600/8760
+[LSM] finished timestep 6624/8760
+[LSM] finished timestep 6648/8760
+[LSM] finished timestep 6672/8760
+[LSM] finished timestep 6696/8760
+[LSM] finished timestep 6720/8760
+[LSM] finished timestep 6744/8760
+[LSM] finished timestep 6768/8760
+[LSM] finished timestep 6792/8760
+[LSM] finished timestep 6816/8760
+[LSM] finished timestep 6840/8760
+[LSM] finished timestep 6864/8760
+[LSM] finished timestep 6888/8760
+[LSM] finished timestep 6912/8760
+[LSM] finished timestep 6936/8760
+[LSM] finished timestep 6960/8760
+[LSM] finished timestep 6984/8760
+[LSM] finished timestep 7008/8760
+[LSM] finished timestep 7032/8760
+[LSM] finished timestep 7056/8760
+[LSM] finished timestep 7080/8760
+[LSM] finished timestep 7104/8760
+[LSM] finished timestep 7128/8760
+[LSM] finished timestep 7152/8760
+[LSM] finished timestep 7176/8760
+[LSM] finished timestep 7200/8760
+[LSM] finished timestep 7224/8760
+[LSM] finished timestep 7248/8760
+[LSM] finished timestep 7272/8760
+[LSM] finished timestep 7296/8760
+[LSM] finished timestep 7320/8760
+[LSM] finished timestep 7344/8760
+[LSM] finished timestep 7368/8760
+[LSM] finished timestep 7392/8760
+[LSM] finished timestep 7416/8760
+[LSM] finished timestep 7440/8760
+[LSM] finished timestep 7464/8760
+[LSM] finished timestep 7488/8760
+[LSM] finished timestep 7512/8760
+[LSM] finished timestep 7536/8760
+[LSM] finished timestep 7560/8760
+[LSM] finished timestep 7584/8760
+[LSM] finished timestep 7608/8760
+[LSM] finished timestep 7632/8760
+[LSM] finished timestep 7656/8760
+[LSM] finished timestep 7680/8760
+[LSM] finished timestep 7704/8760
+[LSM] finished timestep 7728/8760
+[LSM] finished timestep 7752/8760
+[LSM] finished timestep 7776/8760
+[LSM] finished timestep 7800/8760
+[LSM] finished timestep 7824/8760
+[LSM] finished timestep 7848/8760
+[LSM] finished timestep 7872/8760
+[LSM] finished timestep 7896/8760
+[LSM] finished timestep 7920/8760
+[LSM] finished timestep 7944/8760
+[LSM] finished timestep 7968/8760
+[LSM] finished timestep 7992/8760
+[LSM] finished timestep 8016/8760
+[LSM] finished timestep 8040/8760
+[LSM] finished timestep 8064/8760
+[LSM] finished timestep 8088/8760
+[LSM] finished timestep 8112/8760
+[LSM] finished timestep 8136/8760
+[LSM] finished timestep 8160/8760
+[LSM] finished timestep 8184/8760
+[LSM] finished timestep 8208/8760
+[LSM] finished timestep 8232/8760
+[LSM] finished timestep 8256/8760
+[LSM] finished timestep 8280/8760
+[LSM] finished timestep 8304/8760
+[LSM] finished timestep 8328/8760
+[LSM] finished timestep 8352/8760
+[LSM] finished timestep 8376/8760
+[LSM] finished timestep 8400/8760
+[LSM] finished timestep 8424/8760
+[LSM] finished timestep 8448/8760
+[LSM] finished timestep 8472/8760
+[LSM] finished timestep 8496/8760
+[LSM] finished timestep 8520/8760
+[LSM] finished timestep 8544/8760
+[LSM] finished timestep 8568/8760
+[LSM] finished timestep 8592/8760
+[LSM] finished timestep 8616/8760
+[LSM] finished timestep 8640/8760
+[LSM] finished timestep 8664/8760
+[LSM] finished timestep 8688/8760
+[LSM] finished timestep 8712/8760
+[LSM] finished timestep 8736/8760
+[LSM] finished timestep 8760/8760
+
+TIMESTEP = 8754 | DATE = 2021-09-30-61200
+
+TIMESTEP = 8755 | DATE = 2021-09-30-64800
+
+TIMESTEP = 8756 | DATE = 2021-09-30-68400
+
+TIMESTEP = 8757 | DATE = 2021-09-30-72000
+
+TIMESTEP = 8758 | DATE = 2021-09-30-75600
+
+TIMESTEP = 8759 | DATE = 2021-09-30-79200
+
+TIMESTEP = 8760 | DATE = 2021-09-30-82800
+ Write CoLM Active Restart: istep_pf =         8760
+
+TIMESTEP = 8754 | DATE = 2021-09-30-61200
+
+TIMESTEP = 8755 | DATE = 2021-09-30-64800
+
+TIMESTEP = 8756 | DATE = 2021-09-30-68400
+
+TIMESTEP = 8757 | DATE = 2021-09-30-72000
+
+TIMESTEP = 8758 | DATE = 2021-09-30-75600
+
+TIMESTEP = 8759 | DATE = 2021-09-30-79200
+
+TIMESTEP = 8760 | DATE = 2021-09-30-82800
+ Write CoLM Active Restart: istep_pf =         8760
+
+TIMESTEP = 8754 | DATE = 2021-09-30-61200
+
+TIMESTEP = 8755 | DATE = 2021-09-30-64800
+
+TIMESTEP = 8756 | DATE = 2021-09-30-68400
+
+TIMESTEP = 8757 | DATE = 2021-09-30-72000
+
+TIMESTEP = 8758 | DATE = 2021-09-30-75600
+
+TIMESTEP = 8759 | DATE = 2021-09-30-79200
+
+TIMESTEP = 8760 | DATE = 2021-09-30-82800
+ Write CoLM Active Restart: istep_pf =         8760
+
+TIMESTEP = 8754 | DATE = 2021-09-30-61200
+
+TIMESTEP = 8755 | DATE = 2021-09-30-64800
+
+TIMESTEP = 8756 | DATE = 2021-09-30-68400
+
+TIMESTEP = 8757 | DATE = 2021-09-30-72000
+
+TIMESTEP = 8758 | DATE = 2021-09-30-75600
+
+TIMESTEP = 8759 | DATE = 2021-09-30-79200
+
+TIMESTEP = 8760 | DATE = 2021-09-30-82800
+ Write CoLM Active Restart: istep_pf =         8760
+
+TIMESTEP = 8754 | DATE = 2021-09-30-61200
+
+TIMESTEP = 8755 | DATE = 2021-09-30-64800
+
+TIMESTEP = 8756 | DATE = 2021-09-30-68400
+
+TIMESTEP = 8757 | DATE = 2021-09-30-72000
+
+TIMESTEP = 8758 | DATE = 2021-09-30-75600
+
+TIMESTEP = 8759 | DATE = 2021-09-30-79200
+
+TIMESTEP = 8760 | DATE = 2021-09-30-82800
+ Write CoLM Active Restart: istep_pf =         8760
+
+TIMESTEP = 8754 | DATE = 2021-09-30-61200
+
+TIMESTEP = 8755 | DATE = 2021-09-30-64800
+
+TIMESTEP = 8756 | DATE = 2021-09-30-68400
+
+TIMESTEP = 8757 | DATE = 2021-09-30-72000
+
+TIMESTEP = 8758 | DATE = 2021-09-30-75600
+
+TIMESTEP = 8759 | DATE = 2021-09-30-79200
+
+TIMESTEP = 8760 | DATE = 2021-09-30-82800
+ Write CoLM Active Restart: istep_pf =         8760
+
+TIMESTEP = 8754 | DATE = 2021-09-30-61200
+
+TIMESTEP = 8755 | DATE = 2021-09-30-64800
+
+TIMESTEP = 8756 | DATE = 2021-09-30-68400
+
+TIMESTEP = 8757 | DATE = 2021-09-30-72000
+
+TIMESTEP = 8758 | DATE = 2021-09-30-75600
+
+TIMESTEP = 8759 | DATE = 2021-09-30-79200
+
+TIMESTEP = 8760 | DATE = 2021-09-30-82800
+ Write CoLM Active Restart: istep_pf =         8760
+
+TIMESTEP = 8754 | DATE = 2021-09-30-61200
+
+TIMESTEP = 8755 | DATE = 2021-09-30-64800
+
+TIMESTEP = 8756 | DATE = 2021-09-30-68400
+
+TIMESTEP = 8757 | DATE = 2021-09-30-72000
+
+TIMESTEP = 8758 | DATE = 2021-09-30-75600
+
+TIMESTEP = 8759 | DATE = 2021-09-30-79200
+
+TIMESTEP = 8760 | DATE = 2021-09-30-82800
+ Write CoLM Active Restart: istep_pf =         8760
+
+TIMESTEP = 8754 | DATE = 2021-09-30-61200
+
+TIMESTEP = 8755 | DATE = 2021-09-30-64800
+
+TIMESTEP = 8756 | DATE = 2021-09-30-68400
+
+TIMESTEP = 8757 | DATE = 2021-09-30-72000
+
+TIMESTEP = 8758 | DATE = 2021-09-30-75600
+
+TIMESTEP = 8759 | DATE = 2021-09-30-79200
+
+TIMESTEP = 8760 | DATE = 2021-09-30-82800
+ Write CoLM Active Restart: istep_pf =         8760
+
+TIMESTEP = 8754 | DATE = 2021-09-30-61200
+
+TIMESTEP = 8755 | DATE = 2021-09-30-64800
+
+TIMESTEP = 8756 | DATE = 2021-09-30-68400
+
+TIMESTEP = 8757 | DATE = 2021-09-30-72000
+
+TIMESTEP = 8758 | DATE = 2021-09-30-75600
+
+TIMESTEP = 8759 | DATE = 2021-09-30-79200
+
+TIMESTEP = 8760 | DATE = 2021-09-30-82800
+ Write CoLM Active Restart: istep_pf =         8760
+
+TIMESTEP = 8754 | DATE = 2021-09-30-61200
+
+TIMESTEP = 8755 | DATE = 2021-09-30-64800
+
+TIMESTEP = 8756 | DATE = 2021-09-30-68400
+
+TIMESTEP = 8757 | DATE = 2021-09-30-72000
+
+TIMESTEP = 8758 | DATE = 2021-09-30-75600
+
+TIMESTEP = 8759 | DATE = 2021-09-30-79200
+
+TIMESTEP = 8760 | DATE = 2021-09-30-82800
+ Write CoLM Active Restart: istep_pf =         8760
+
+TIMESTEP = 8754 | DATE = 2021-09-30-61200
+
+TIMESTEP = 8755 | DATE = 2021-09-30-64800
+
+TIMESTEP = 8756 | DATE = 2021-09-30-68400
+
+TIMESTEP = 8757 | DATE = 2021-09-30-72000
+
+TIMESTEP = 8758 | DATE = 2021-09-30-75600
+
+TIMESTEP = 8759 | DATE = 2021-09-30-79200
+
+TIMESTEP = 8760 | DATE = 2021-09-30-82800
+ Write CoLM Active Restart: istep_pf =         8760
+2026-03-30 22:33:30
