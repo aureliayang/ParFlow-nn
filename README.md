@@ -1,6 +1,9 @@
-# A Hybrid Physics–ML Framework for Integrating Groundwater Dynamics into Land Surface Modeling
+# A Hybrid Physics–ML Framework for Integrating Groundwater Dynamics into Land Surface Modeling  
+See our paper: [DOI: 10.31223/X5PR3B](https://doi.org/10.31223/X5PR3B)
 
-![Hybrid Framework](img/hybrid_framework.jpg)
+![Hybrid Framework](img/hybrid_framework.jpg)  
+
+This figure provides an overview of the hybrid framework. It contrasts different modeling approaches, defines an error acceptance criterion, and presents a multi-timescale strategy to achieve a balance between physical fidelity and computational efficiency.
 
 Please try following the instructions below. If you have any questions, feel free to contact me at yangch329@mail.sysu.edu.cn. We will update this repository promptly based on any useful feedback you provide.
 
