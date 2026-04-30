@@ -1,7 +1,10 @@
 # A Hybrid Physics–ML Framework for Integrating Groundwater Dynamics into Land Surface Modeling
 
-## Status
-The neural network surrogate model and CoLM202x are currently integrated and communicate smoothly.
+![Hybrid Framework](img/hybrid_framework.jpg)
+
+Please try following the instructions below. 
+If you have any questions, feel free to contact me at yangch329@mail.sysu.edu.cn 
+We will update this repository promptly based on any useful feedback you provide.
 
 ## Repository Structure
 **clm_cbind**: Makefile and Fortran (.F90) source files used to compile `libclm_lsm.so`, which is invoked by the ParFlow surrogate model.  
@@ -37,6 +40,3 @@ After preparing all required inputs, execute:
 ```bash
 cd your_path/pfnn_script
 sh predrnn_pfnn.sh
-
-
-
