@@ -7,9 +7,9 @@ If you have any questions, feel free to contact me at yangch329@mail.sysu.edu.cn
 We will update this repository promptly based on any useful feedback you provide.
 
 ## Repository Structure
-**clm_cbind**: Makefile and Fortran (.F90) source files used to compile `libclm_lsm.so`, which is invoked by the ParFlow surrogate model.  
-**core**: Source code of the hybrid physics–ML coupling system.  
-**full_year_scripts**: Slurm job scripts and outputs for the full-year hybrid simulations used in the paper.  
+**clm_cbind**: Makefile and Fortran (.F90) source files used to compile `libclm_lsm.so`, which is invoked by the ParFlow surrogate model. These files have already been copied to core/model. They are only needed if you want to recompile the shared library (.so).
+**core**: Source code of the hybrid physics–ML coupling system. 
+**full_year_scripts**: Slurm job script for the full-year hybrid simulations used in the paper.  
 **CoLM_nlfile.nml**: CoLM configuration file specifying the simulation period.  
 **CoLM_readin.dat**: CoLM input file containing soil properties and land cover information for the modeling domain.  
 **snicar_par.dat**: CoLM input file; keep this file in the current directory.  
@@ -18,7 +18,7 @@ We will update this repository promptly based on any useful feedback you provide
 - **ERA5_forcings**: 48-hour ERA5-Land meteorological forcing data for the test case.
 - **restart_files**: Required for hot-start initialization at the end of water year 2020 (WY2020).
 - **trained_model**: Pretrained surrogate model used in the hybrid system.
-- **static_inputs_combined46.pfb**: Static input file containing 46 land surface attributes.
+- **static_inputs_combined46.pfb**: Static input file containing 46 static attributes.
 - **stats_press_evap2.yaml**: Mean and standard deviation for exchange fluxes and pressure head.
 
 **pfnn_script**:
