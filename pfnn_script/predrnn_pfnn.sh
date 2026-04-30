@@ -10,8 +10,8 @@ python -u run.py \
     --norm_file /data/aurelia-data/workspace/clm_call/stats_press_evap.yaml \
     --static_inputs_path /data/aurelia-data/workspace/clm_call \
     --static_inputs_filename static_inputs_combined46.pfb \
-    --forcings_path /data/aurelia-data/workspace/beijiang/outputs2 \
-    --targets_path /data/aurelia-data/workspace/beijiang/outputs2 \
+    --forcings_path /data/aurelia-data/workspace/beijiang/outputs2019_2 \
+    --targets_path /data/aurelia-data/workspace/beijiang/outputs2019_2 \
     --forcings_paths /data/aurelia-data/workspace/beijiang/outputs2 /data/aurelia-data/workspace/beijiang/outputs2020 \
     --targets_paths /data/aurelia-data/workspace/beijiang/outputs2 /data/aurelia-data/workspace/beijiang/outputs2020 \
     --init_cond_channel 11 \
@@ -40,7 +40,7 @@ python -u run.py \
     --display_interval 100 \
     --test_interval 1000 \
     --snapshot_interval 5000 \
-    --pretrained_model /home/aurelia/data/workspace/ParFlow-nn/checkpoints/onecycle_kernel4/model.ckpt-70000 \
+    --pretrained_model /home/aurelia/data/workspace/ParFlow-nn/checkpoints/onecycle_kernel4/model.ckpt-80000 \
     --lsm_forcings_path /home/aurelia/data/workspace/wateryear_2019 \
     --lsm_forcings_name E5L 
    

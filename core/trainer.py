@@ -28,9 +28,12 @@ def train(model, forcings, init_cond, static_inputs, targets,
 
 
 def test(model, test_input_handle, configs, itr, save_results=False):
+    import datetime
+
     print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'test...')
 
     test_input_handle.begin(do_shuffle=False)
+
     if save_results:
         res_path = os.path.join(configs.gen_frm_dir, str(itr))
         os.makedirs(res_path, exist_ok=True)
@@ -56,58 +59,68 @@ def test(model, test_input_handle, configs, itr, save_results=False):
             mask,
         ) = test_input_handle.get_batch()
 
+        # ====== forward ======
         img_gen = model.test(forcings, init_cond, static_inputs)
 
+        # ====== RMSE（不reshape，直接算）======
+        rmse_total = torch.sqrt(torch.mean((img_gen - targets.to(img_gen.device)) ** 2))
+        print('RMSE_TOTAL =', rmse_total.item())
+
+        # ====== 只有需要保存才reshape ======
         if save_results:
             path = os.path.join(res_path, str(batch_id))
             os.makedirs(path, exist_ok=True)
 
-        num_patch = test_input_handle.num_patch
-        coords_space = test_input_handle.coords_space
+            num_patch = test_input_handle.num_patch
+            coords_space = test_input_handle.coords_space
 
-        img_gen = preprocess.reshape_patch_back_time(img_gen, num_patch)
-        img_gen = preprocess.reshape_patch_back(
-            img_gen,
-            coords_space,
-            configs.img_height,
-            configs.img_width,
-            configs.patch_size
-        )
-        img_gen = torch.squeeze((img_gen.detach().cpu()) * std_p + mean_p).numpy().astype(np.float64)
+            print("reshape start", datetime.datetime.now())
 
-        img_tar = preprocess.reshape_patch_back_time(targets, num_patch)
-        img_tar = preprocess.reshape_patch_back(
-            img_tar,
-            coords_space,
-            configs.img_height,
-            configs.img_width,
-            configs.patch_size
-        )
-        img_tar = torch.squeeze((img_tar.detach().cpu()) * std_p + mean_p).numpy().astype(np.float64)
+            # ====== reshape prediction ======
+            img_gen_np = preprocess.reshape_patch_back_time(img_gen, num_patch)
+            img_gen_np = preprocess.reshape_patch_back(
+                img_gen_np,
+                coords_space,
+                configs.img_height,
+                configs.img_width,
+                configs.patch_size
+            )
+            img_gen_np = torch.squeeze(
+                (img_gen_np.detach().cpu()) * std_p + mean_p
+            ).numpy().astype(np.float64)
 
-        assert img_gen.shape == img_tar.shape, (
-            f"Prediction and target shapes do not match: "
-            f"{img_gen.shape} vs {img_tar.shape}"
-        )
+            # ====== reshape target ======
+            img_tar_np = preprocess.reshape_patch_back_time(targets, num_patch)
+            img_tar_np = preprocess.reshape_patch_back(
+                img_tar_np,
+                coords_space,
+                configs.img_height,
+                configs.img_width,
+                configs.patch_size
+            )
+            img_tar_np = torch.squeeze(
+                (img_tar_np.detach().cpu()) * std_p + mean_p
+            ).numpy().astype(np.float64)
 
-        rmse_total = np.sqrt(np.mean((img_gen - img_tar) ** 2))
-        print('RMSE_TOTAL =', rmse_total)
+            print("reshape end", datetime.datetime.now())
 
-        if save_results:
-            for i in range(img_gen.shape[0]):
+            # ====== 写文件 ======
+            for i in range(img_gen_np.shape[0]):
                 file_name = os.path.join(
                     path,
                     'nn_gen.press.' + str(i + configs.test_start_step).zfill(5) + '.pfb'
                 )
-                write_pfb(file_name, img_gen[i, :, :, :], dist=False)
+                write_pfb(file_name, img_gen_np[i, :, :, :], dist=False)
 
                 file_name = os.path.join(
                     path,
                     'nn_tar.press.' + str(i + configs.test_start_step).zfill(5) + '.pfb'
                 )
-                write_pfb(file_name, img_tar[i, :, :, :], dist=False)
+                write_pfb(file_name, img_tar_np[i, :, :, :], dist=False)
 
         test_input_handle.next()
+
+    print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'test done')
 
 
 def test_lsm(model, configs, itr):

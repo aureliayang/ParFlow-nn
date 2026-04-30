@@ -194,12 +194,18 @@ def debug_random_state(device: str):
         print("Torch CUDA: skipped (device=cpu)")
 
 def train_wrapper(model, args):
+    start_itr = 0
     if args.pretrained_model:
-        model.load(args.pretrained_model)
+        start_itr = model.load(
+            args.pretrained_model,
+            model.optimizer,
+            model.scheduler
+        )
+        print(f"Resume training from iteration {start_itr}")
 
     train_input_handle, test_input_handle = datasets_factory.data_provider(args)
 
-    for itr in range(1, args.max_iterations + 1):
+    for itr in range(start_itr + 1, args.max_iterations + 1):
         if train_input_handle.no_batch_left():
             train_input_handle.begin(do_shuffle=True)
 
@@ -235,11 +241,18 @@ def train_wrapper(model, args):
         )
 
         if itr % args.snapshot_interval == 0:
-            model.save(itr)
+            print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'save model start')
+            model.save(itr, model.optimizer, model.scheduler)
+            print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'save model end')
 
         if itr % args.test_interval == 0:
-            trainer.test(model, test_input_handle, args, itr,
-                         save_results=(itr % args.snapshot_interval == 0))
+            trainer.test(
+                model,
+                test_input_handle,
+                args,
+                itr,
+                save_results=(itr % args.snapshot_interval == 0)
+            )
 
         train_input_handle.next()
 
@@ -262,6 +275,7 @@ def main():
 
     set_seed(args.seed)
     debug_random_state(args.device)
+    set_seed(args.seed)
     prepare_dirs(args)
 
     print("Initializing models")

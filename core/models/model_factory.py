@@ -463,16 +463,31 @@ class Model(object):
             configs.dz, dtype=torch.float32, device=configs.device
         ).view(1, 1, -1, 1, 1)
 
-    def save(self, itr):
-        stats = {'net_param': self.network.state_dict()}
+    def save(self, itr, optimizer=None, scheduler=None):
+        stats = {
+            'net_param': self.network.state_dict(),
+            'optimizer': optimizer.state_dict() if optimizer is not None else None,
+            'scheduler': scheduler.state_dict() if scheduler is not None else None,
+            'itr': itr
+        }
         checkpoint_path = os.path.join(self.configs.save_dir, f'model.ckpt-{itr}')
         torch.save(stats, checkpoint_path)
         print(f"save model to {checkpoint_path}")
-
-    def load(self, checkpoint_path):
+    
+    def load(self, checkpoint_path, optimizer=None, scheduler=None):
         print('load model:', checkpoint_path)
         stats = torch.load(checkpoint_path, map_location=torch.device(self.configs.device))
+    
         self.network.load_state_dict(stats['net_param'])
+    
+        if optimizer is not None and stats.get('optimizer') is not None:
+            optimizer.load_state_dict(stats['optimizer'])
+    
+        if scheduler is not None and stats.get('scheduler') is not None:
+            scheduler.load_state_dict(stats['scheduler'])
+    
+        itr = stats.get('itr', 0)
+        return itr
 
     def _init_states(self, batch, height, width):
         h_t, c_t, delta_c_list, delta_m_list = [], [], [], []
@@ -893,7 +908,7 @@ class Model(object):
                     evap_trans_tensor = torch.from_numpy(evap_trans_global)
                     forcings = preprocess.reshape_patch(evap_trans_tensor, coords_space, patch_size).to(self.configs.device)
             
-                    # write_pfb(os.path.join(res_path, 'heat_lh.' + str(t+1).zfill(5) + '.pfb'), heat_lh, dist=False)
+                    write_pfb(os.path.join(res_path, 'heat_lh.' + str(t+1).zfill(5) + '.pfb'), heat_lh, dist=False)
                     # write_pfb(os.path.join(res_path, 'heat_sh.' + str(t+1).zfill(5) + '.pfb'), heat_sh, dist=False)
                     # write_pfb(os.path.join(res_path, 'temp_gt.' + str(t+1).zfill(5) + '.pfb'), temp_gt, dist=False)
                     # write_pfb(os.path.join(res_path, 'evap.' + str(t+1).zfill(5) + '.pfb'), trans, dist=False)

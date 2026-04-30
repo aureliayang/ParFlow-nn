@@ -6,6 +6,8 @@ import logging
 from core.utils import preprocess
 from parflow.tools.fs import get_absolute_path
 from parflow.tools.io import read_pfb
+import glob
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +59,8 @@ class InputHandle:
         self.num_patch = num_patch
 
         self.use_storage_terms = self.alpha is not None
+
+        self.mode = mode
 
     def total(self):
         return self.total_seq
@@ -114,7 +118,7 @@ class InputHandle:
                 forcings_batch.to(self.configs.device, non_blocking=True),
                 init_cond_batch.to(self.configs.device, non_blocking=True),
                 static_inputs_batch,
-                targets_batch.to(self.configs.device, non_blocking=True),
+                targets_batch.to(self.configs.device, non_blocking=True) if self.mode == 'train' else targets_batch,
                 None,
                 None,
                 None,
@@ -136,7 +140,7 @@ class InputHandle:
             forcings_batch.to(self.configs.device, non_blocking=True),
             init_cond_batch.to(self.configs.device, non_blocking=True),
             static_inputs_batch,
-            targets_batch.to(self.configs.device, non_blocking=True),
+            targets_batch.to(self.configs.device, non_blocking=True) if self.mode == 'train' else targets_batch,
             alpha_batch.to(self.configs.device, non_blocking=True),
             n_batch.to(self.configs.device, non_blocking=True),
             theta_r_batch.to(self.configs.device, non_blocking=True),
@@ -207,44 +211,36 @@ class DataProcess:
         self.act_channel = configs.act_channel
         self.img_channel = configs.img_channel
 
+
     def collect_time_files(self, prefixes, varname="", start_idx=0, skip_first_of_later_dirs=False):
         """
-        从多个目录收集时间序列文件，并按目录顺序拼接。
-
-        参数
-        ----
-        prefixes : list[str]
-            每个目录对应的文件前缀
-        varname : str
-            target 用 "press."，forcing 用 ""
-        start_idx : int
-            每个目录默认从哪个编号开始读
-            forcing 应该从 1 开始
-            press 应该从 0 开始
-        skip_first_of_later_dirs : bool
-            是否在后续目录中跳过第一个时间步
-            press=True，因为第二年 0 与上一年最后一帧重复
-            forcing=False，因为第二年 1 不重复
+        返回:
+            files: 按目录顺序拼接后的文件路径列表（保留你原来的用法）
+            time_to_file: 真实时间编号 -> 文件路径
+                         若不同目录存在相同编号，后面的会覆盖前面的
         """
         files = []
-
+        time_to_file = {}
+    
+        pattern = re.compile(r"\.(\d+)\.pfb$")
+    
         for i_prefix, prefix in enumerate(prefixes):
             t = start_idx
-
             if i_prefix > 0 and skip_first_of_later_dirs:
                 t += 1
-
+    
             while True:
                 fname = prefix + varname + str(t).zfill(5) + ".pfb"
                 fname_abs = get_absolute_path(fname)
-
+    
                 if not os.path.exists(fname_abs):
                     break
-
+    
                 files.append(fname_abs)
+                time_to_file[t] = fname_abs
                 t += 1
-
-        return files
+    
+        return files, time_to_file
 
 
 
@@ -255,27 +251,31 @@ class DataProcess:
             ss_stride = self.input_param.ss_stride_train
             st_stride = self.input_param.st_stride_train
             input_length = self.input_length_train
+            forcing_dirs = self.forcings_prefixes[:2]
+            target_dirs  = self.output_prefixes[:2]
         else:
             start_step = self.input_param.test_start_step
             end_step = self.input_param.test_end_step
             ss_stride = self.input_param.ss_stride_test
             st_stride = self.input_param.st_stride_test
             input_length = self.input_length_test
+            forcing_dirs = self.forcings_prefixes[2:]
+            target_dirs  = self.output_prefixes[2:]
 
         use_storage_terms = abs(float(self.input_param.storage_beta)) > 1e-12
 
         # forcing_files = self.collect_time_files(self.forcings_prefixes, varname="")
         # target_files = self.collect_time_files(self.output_prefixes, varname="press.")
 
-        forcing_files = self.collect_time_files(
-            self.forcings_prefixes,
+        forcing_files, forcing_map = self.collect_time_files(
+            forcing_dirs,
             varname="",
             start_idx=1,
             skip_first_of_later_dirs=False,
         )
-
-        target_files = self.collect_time_files(
-            self.output_prefixes,
+        
+        target_files, target_map = self.collect_time_files(
+            target_dirs,
             varname="press.",
             start_idx=0,
             skip_first_of_later_dirs=True,
@@ -283,15 +283,48 @@ class DataProcess:
 
         if len(forcing_files) == 0:
             raise ValueError("No forcing files found in forcings_paths / forcings_path")
-
+        
         if len(target_files) == 0:
             raise ValueError("No target files found in targets_paths / targets_path")
-
-        total_steps = min(len(forcing_files), len(target_files))
-
-        print(f"[load_data] total forcing files = {len(forcing_files)}")
-        print(f"[load_data] total target files  = {len(target_files)}")
-        print(f"[load_data] usable total steps  = {total_steps}")
+        
+        if mode == 'train':
+            total_steps = min(len(forcing_files), len(target_files))
+            print(f"[train] total forcing files = {len(forcing_files)}")
+            print(f"[train] total target files  = {len(target_files)}")
+            print(f"[train] usable total steps  = {total_steps}")
+        
+            if end_step >= total_steps:
+                raise ValueError(
+                    f"training_end_step={end_step} exceeds available total_steps={total_steps}"
+                )
+        else:
+            usable_times = sorted(set(forcing_map.keys()) & set(target_map.keys()))
+            if len(usable_times) == 0:
+                raise ValueError("No overlapping time indices between forcing and target files")
+        
+            min_time = usable_times[0]
+            max_time = usable_times[-1]
+        
+            print(f"[test] total forcing files = {len(forcing_files)}")
+            print(f"[test] total target files  = {len(target_files)}")
+            print(f"[test] usable time range   = {min_time} -> {max_time}")
+            print(f"[test] usable total steps  = {len(usable_times)}")
+        
+            if start_step < min_time:
+                raise ValueError(
+                    f"start_step={start_step} is smaller than available min_time={min_time}"
+                )
+        
+            if end_step > max_time:
+                raise ValueError(
+                    f"end_step={end_step} exceeds available max_time={max_time}. "
+                    f"Please reduce training_end_step/test_end_step."
+                )
+        
+            if (start_step - 1) not in target_map:
+                raise ValueError(
+                    f"init condition press.{str(start_step - 1).zfill(5)}.pfb not found for start_step={start_step}"
+                )
 
         ys = list(range(0, self.img_height - self.patch_size + 1, ss_stride))
         xs = list(range(0, self.img_width - self.patch_size + 1, ss_stride))
@@ -303,12 +336,6 @@ class DataProcess:
             xs.append(self.img_width - self.patch_size)
 
         coords_space = [(y, x) for y in ys for x in xs]
-
-        if end_step >= total_steps:
-            raise ValueError(
-                f"end_step={end_step} exceeds available total_steps={total_steps}. "
-                f"Please reduce training_end_step/test_end_step."
-            )
 
         coords_time = [
             start_t for start_t in range(start_step, end_step - input_length + 2, st_stride)
@@ -396,44 +423,61 @@ class DataProcess:
             forcing_end   = start_t + input_length - 1
             init_idx      = start_t - 1
 
-            print(
-                f"[seq {idx_t+1}/{num_seq}] "
-                f"forcing: {forcing_start}->{forcing_end}, "
-                f"target: {forcing_start}->{forcing_end}, "
-                f"init: {init_idx}",
-                flush=True
-            )
+            # print(
+            #     f"[seq {idx_t+1}/{num_seq}] "
+            #     f"forcing: {forcing_start}->{forcing_end}, "
+            #     f"target: {forcing_start}->{forcing_end}, "
+            #     f"init: {init_idx}",
+            #     flush=True
+            # )
+            if idx_t % 20 == 0:
+                print(f"[seq {idx_t+1}/{num_seq}]")
+                
             for i in range(input_length):
-                # forcings_name = self.forcings_path + str(i + start_t).zfill(5) + ".pfb"
-                # frame_np = read_pfb(get_absolute_path(forcings_name)).astype(np.float32)
-                forcing_idx = i + start_t
-                forcings_name = forcing_files[forcing_idx]
+                if mode == 'train':
+                    forcing_idx = i + start_t - 1
+                    forcings_name = forcing_files[forcing_idx]
+            
+                    target_idx = i + start_t
+                    targets_name = target_files[target_idx]
+                else:
+                    forcing_t = i + start_t
+                    if forcing_t not in forcing_map:
+                        raise ValueError(f"forcing file for time {forcing_t} not found")
+                    forcings_name = forcing_map[forcing_t]
+            
+                    target_t = i + start_t
+                    if target_t not in target_map:
+                        raise ValueError(f"target file for time {target_t} not found")
+                    targets_name = target_map[target_t]
+            
                 frame_np = read_pfb(forcings_name).astype(np.float32)
                 frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
                 frame_im = (frame_im - mean_a) / std_a
-
+            
                 for idx_s, (y, x) in enumerate(coords_space):
                     forcings[idx_t * num_patch + idx_s: idx_t * num_patch + idx_s + 1, i:i + 1, :, :, :] = \
                         frame_im[:, :, 1:11, y:y + self.patch_size, x:x + self.patch_size]
-
-                # targets_name = self.output_prefix + "press." + str(i + start_t).zfill(5) + ".pfb"
-                # frame_np = read_pfb(get_absolute_path(targets_name)).astype(np.float32)
-                target_idx = i + start_t
-                targets_name = target_files[target_idx]
+            
                 frame_np = read_pfb(targets_name).astype(np.float32)
                 frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
                 frame_im = (frame_im - mean_p) / std_p
-
+            
                 for idx_s, (y, x) in enumerate(coords_space):
                     targets[idx_t * num_patch + idx_s: idx_t * num_patch + idx_s + 1, i:i + 1, :, :, :] = \
                         frame_im[:, :, :, y:y + self.patch_size, x:x + self.patch_size]
 
             # init_cond_name = self.output_prefix + "press." + str(start_t - 1).zfill(5) +
-            init_idx = start_t - 1
-            if init_idx < 0:
-                raise ValueError("start_t must be >= 1 because init_cond uses start_t - 1")
-
-            init_cond_name = target_files[init_idx]
+            if mode == 'train':
+                init_idx = start_t - 1
+                if init_idx < 0:
+                    raise ValueError("start_t must be >= 1 because init_cond uses start_t - 1")
+                init_cond_name = target_files[init_idx]
+            else:
+                init_t = start_t - 1
+                if init_t not in target_map:
+                    raise ValueError(f"init condition target file for time {init_t} not found")
+                init_cond_name = target_map[init_t]
             frame_np = read_pfb(init_cond_name).astype(np.float32)
             frame_im = torch.from_numpy(frame_np).unsqueeze(0).unsqueeze(0)
             frame_im = (frame_im - mean_p) / std_p
