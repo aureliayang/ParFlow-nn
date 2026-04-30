@@ -4,42 +4,20 @@
 
 The neural network surrogate model and CoLM202x are currently integrated and communicate smoothly.
 
----
-
 ## Repository Structure
 
-### `clm_cbind`
+**clm_cbind**: Makefile and Fortran (.F90) source files used to compile `libclm_lsm.so`, which is invoked by the ParFlow surrogate model.  
 
-Contains the `Makefile` and Fortran (`.F90`) source files used to compile the shared library `libclm_lsm.so`, which is invoked by the ParFlow surrogate model.
+**full_year_scripts**: Slurm job scripts and outputs for the full-year hybrid simulations used in the paper.  
 
----
+**other_inputs**:  
 
-### `full_year_scripts`
+- **ERA5_forcings**: 48-hour ERA5-Land meteorological forcing data for the test case.  
 
-Contains the Slurm job scripts and outputs for the full-year hybrid simulations presented in the paper.
+- **restart_files**: Required for the hot-start initialization at the end of water year 2020 (WY2020).  
 
----
+- **trained_model**: Pretrained surrogate model used in the hybrid system.  
 
-### `other_inputs`
+- **static_inputs_combined46.pfb**: Static input file containing 46 land surface attributes.  
 
-#### `ERA5_forcings`
-
-48-hour ERA5-Land meteorological forcing data used for the test case.
-
-#### `restart_files`
-
-The test case is initialized from a hot start and requires restart files at the end of water year 2020 (WY2020).
-
-#### `trained_model`
-
-Pretrained surrogate model used in the hybrid simulation.
-
-#### `static_inputs_combined46.pfb`
-
-Static input file containing 46 land surface attributes.
-
-#### `stats_press_evap2.yaml`
-
-Normalization statistics (mean and standard deviation) for exchange fluxes and pressure head.
-
-
+- **stats_press_evap2.yaml**: Mean and standard deviation for exchange fluxes and pressure head.
