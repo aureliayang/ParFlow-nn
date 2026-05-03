@@ -10,14 +10,14 @@ Please try following the instructions below. If you have any questions, feel fre
 ## Repository Structure
 **clm_cbind**: Makefile and Fortran (.F90) source files used to compile `libclm_lsm.so`, which is invoked by the ParFlow surrogate model. A test script (`demo_lsm.py`) is provided to verify that the library is built correctly. The compiled `.so` has already been copied to `core/model`. This directory is only needed if you want to recompile the shared library.  
 **core**: Source code of the hybrid physics–ML coupling system.  
-**full_year_run**: Slurm job script for the full-year hybrid simulations used in the paper.  
+**full_year_run**: Slurm job script for the full-year hybrid simulations used in the preprint.  
 **CoLM_nlfile.nml**: CoLM configuration file specifying the simulation period.  
 **CoLM_readin.dat**: CoLM input file containing soil properties and land cover information for the modeling domain.  
 **snicar_par.dat**: CoLM input file; keep this file in the current directory.  
   
 **other_inputs**:
 - **ERA5_forcings**: 48-hour ERA5-Land meteorological forcing data for the test case.
-- **restart_files**: Required for hot-start initialization at the end of water year 2020 (WY2020).
+- **restart_files**: Required for hot-start initialization at the end of WY2020. Before running, copy all files directly into the same directory as `run.py` (do not place them in a subdirectory).
 - **trained_model**: Pretrained surrogate model used in the hybrid system.  
 - **targets_path**: Directory containing static property files and the initial condition (e.g., `press.00000.pfb`), to be specified by `--targets_path`.
 - **static_inputs_combined46.pfb**: Static input file containing 46 static attributes.
