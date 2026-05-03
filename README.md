@@ -1,5 +1,7 @@
 # A Hybrid Physics–ML Framework for Integrating Groundwater Dynamics into Land Surface Modeling  
-See our preprint: [DOI: 10.31223/X5PR3B](https://doi.org/10.31223/X5PR3B)
+See our preprint: [DOI: 10.31223/X5PR3B](https://doi.org/10.31223/X5PR3B)  
+Chen Yang yangch329@mail.sysu.edu.cn  
+Hui Huang huangh573@mail2.sysu.edu.cn  
 
 ![Hybrid Framework](img/hybrid_framework.jpg)  
 
