@@ -9,6 +9,18 @@ This figure provides an overview of the hybrid framework. It contrasts different
 
 Please try following the instructions below. If you have any questions, feel free to contact me at yangch329@mail.sysu.edu.cn. We will update this repository promptly based on any useful feedback you provide.
 
+## Environment Setup
+
+After cloning this repository, create and activate the conda environment:
+
+```bash
+cd your_path/ParFlow-nn
+conda env create -f environment.yml
+conda activate ParFlow-nn
+pip install -e .
+```
+
+
 ## Repository Structure
 **clm_cbind**: Makefile and Fortran (.F90) source files used to compile `libclm_lsm.so`, which is invoked by the ParFlow surrogate model. A test script (`demo_lsm.py`) is provided to verify that the library is built correctly. The compiled `.so` has already been copied to `core/model`. This directory is only needed if you want to recompile the shared library.  
 **core**: Source code of the hybrid physics–ML coupling system.  
@@ -48,3 +60,4 @@ After preparing all required inputs, execute:
 ```bash
 cd your_path/pfnn_script
 sh predrnn_pfnn.sh
+```
